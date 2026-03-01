@@ -22,7 +22,7 @@ jaxlib==0.7.1
 joblib==1.5.3
 kiwisolver==1.4.9
 matplotlib==3.10.7
-mediapipe==0.10.14
+mediapipe==0.10.32
 ml_dtypes==0.5.3
 numpy==2.2.6
 opencv-contrib-python==4.11.0.86
