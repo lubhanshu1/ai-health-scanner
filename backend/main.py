@@ -1,16 +1,26 @@
 import joblib
 import numpy as np
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware   # ✅ NEW
 from pydantic import BaseModel, Field
 from typing import List
 
 app = FastAPI(title="AI Health Scanner - ML Powered")
 
+# ✅ ENABLE CORS (VERY IMPORTANT FOR FLUTTER WEB)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (for development)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # ---------------- LOAD ML MODEL ----------------
 diabetes_model = joblib.load("diabetes_model.pkl")
 
 
-# 🔥 MODEL INFORMATION ENDPOINT (NEW)
+# 🔥 MODEL INFORMATION ENDPOINT
 @app.get("/model-info")
 def model_info():
     return {
@@ -168,7 +178,7 @@ def heart_risk(data: HeartRiskInput):
 @app.post("/diabetes-risk")
 def predict_diabetes(data: DiabetesRiskInput):
 
-    input_data = np.array([[
+    input_data = np.array([[ 
         data.Pregnancies,
         data.Glucose,
         data.BloodPressure,
