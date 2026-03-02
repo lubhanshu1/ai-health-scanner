@@ -54,3 +54,8 @@ urllib3==2.5.0
 uvicorn==0.38.0
 watchfiles==1.1.1
 websockets==15.0.1
+
+# 🔐 AUTHENTICATION LIBRARIES
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+sqlalchemy==2.0.30
