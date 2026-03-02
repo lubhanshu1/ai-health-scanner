@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
@@ -33,7 +34,9 @@ app.add_middleware(
 
 # ================= DATABASE =================
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    DATABASE_URL, connect_args={"check_same_thread": False}
+)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -45,9 +48,18 @@ class User(Base):
 
 Base.metadata.create_all(bind=engine)
 
+# Dependency to get DB session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 # ================= AUTH =================
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
 
 def hash_password(password: str):
     return pwd_context.hash(password)
@@ -60,6 +72,28 @@ def create_access_token(data: dict):
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        user = db.query(User).filter(User.email == email).first()
+
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return user
+
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 # ================= REQUEST MODELS =================
 
@@ -92,9 +126,9 @@ class DiabetesRiskInput(BaseModel):
 # ================= AUTH ROUTES =================
 
 @app.post("/register")
-def register(data: RegisterRequest):
-    db: Session = SessionLocal()
+def register(data: RegisterRequest, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == data.email).first()
+
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -102,6 +136,7 @@ def register(data: RegisterRequest):
         email=data.email,
         password=hash_password(data.password)
     )
+
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -109,15 +144,18 @@ def register(data: RegisterRequest):
     return {"message": "User registered successfully"}
 
 @app.post("/login")
-def login(data: LoginRequest):
-    db: Session = SessionLocal()
+def login(data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not verify_password(data.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token({"sub": user.email})
-    return {"access_token": token, "token_type": "bearer"}
+
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }
 
 # ================= LOAD MODELS =================
 
@@ -125,10 +163,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 diabetes_model = joblib.load(os.path.join(BASE_DIR, "diabetes_model.pkl"))
 heart_model = joblib.load(os.path.join(BASE_DIR, "heart_model.pkl"))
 
-# ================= HEART =================
+# ================= PROTECTED HEART =================
 
 @app.post("/heart-risk")
-def heart_risk(data: HeartRiskInput):
+def heart_risk(
+    data: HeartRiskInput,
+    current_user: User = Depends(get_current_user)
+):
     features = np.array([[ 
         data.age,
         data.sex,
@@ -153,10 +194,13 @@ def heart_risk(data: HeartRiskInput):
         "risk_score": round(float(probability), 4)
     }
 
-# ================= DIABETES =================
+# ================= PROTECTED DIABETES =================
 
 @app.post("/diabetes-risk")
-def predict_diabetes(data: DiabetesRiskInput):
+def predict_diabetes(
+    data: DiabetesRiskInput,
+    current_user: User = Depends(get_current_user)
+):
     input_data = np.array([[ 
         data.Pregnancies,
         data.Glucose,
