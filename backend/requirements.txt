@@ -57,6 +57,7 @@ websockets==15.0.1
 
 # 🔐 AUTHENTICATION LIBRARIES
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 python-jose[cryptography]==3.3.0
 sqlalchemy==2.0.30
 email-validator==2.1.1
