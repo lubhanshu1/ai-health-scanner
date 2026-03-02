@@ -17,7 +17,7 @@ SECRET_KEY = "supersecretkey"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-DATABASE_URL = "sqlite:///./users.db"
+DATABASE_URL = "sqlite:////tmp/users.db"
 
 # ================= APP =================
 
