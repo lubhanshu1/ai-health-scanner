@@ -16,22 +16,25 @@ from openai import OpenAI
 
 # ================= LOAD ENV =================
 
-load_dotenv()
+load_dotenv()  # works locally, ignored on Render
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL not found in .env file")
+    raise ValueError("DATABASE_URL not set")
 
 if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY not found in .env file")
+    raise ValueError("OPENAI_API_KEY not set")
+
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY not set")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ================= CONFIG =================
 
-SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -47,10 +50,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Health check route (important for Render)
+@app.get("/")
+def health_check():
+    return {"status": "AI Health API is running"}
+
 # ================= DATABASE =================
 
-# PostgreSQL should NOT use check_same_thread
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
@@ -288,7 +300,7 @@ def chat_assistant(data: ChatRequest,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful AI health assistant. Provide general advice only. Always recommend consulting a doctor for serious issues."
+                    "content": "You are a helpful AI health assistant. Provide general advice only. Always recommend consulting a doctor."
                 },
                 {"role": "user", "content": data.message}
             ]
