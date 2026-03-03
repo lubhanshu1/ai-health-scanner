@@ -7,22 +7,37 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, EmailStr
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy.orm import sessionmaker, declarative_base, Session, relationship
 from passlib.context import CryptContext
 from jose import JWTError, jwt
+from dotenv import load_dotenv
+from openai import OpenAI
+
+# ================= LOAD ENV =================
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL not found in .env file")
+
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY not found in .env file")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ================= CONFIG =================
 
-SECRET_KEY = "supersecretkey"
+SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-DATABASE_URL = "sqlite:////tmp/users.db"
-
 # ================= APP =================
 
-app = FastAPI(title="AI Health Scanner - ML Powered")
+app = FastAPI(title="AI Health Platform - Production Ready")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,10 +49,10 @@ app.add_middleware(
 
 # ================= DATABASE =================
 
-engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
-)
-SessionLocal = sessionmaker(bind=engine)
+# PostgreSQL should NOT use check_same_thread
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
 class User(Base):
@@ -45,10 +60,21 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     password = Column(String)
+    history = relationship("HealthHistory", back_populates="user")
+
+class HealthHistory(Base):
+    __tablename__ = "health_history"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    prediction_type = Column(String)
+    risk_level = Column(String)
+    risk_score = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="history")
 
 Base.metadata.create_all(bind=engine)
 
-# Dependency to get DB session
 def get_db():
     db = SessionLocal()
     try:
@@ -123,13 +149,14 @@ class DiabetesRiskInput(BaseModel):
     DiabetesPedigreeFunction: float
     Age: int
 
+class ChatRequest(BaseModel):
+    message: str
+
 # ================= AUTH ROUTES =================
 
 @app.post("/register")
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.email == data.email).first()
-
-    if existing_user:
+    if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
 
     new_user = User(
@@ -152,34 +179,26 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_access_token({"sub": user.email})
 
-    return {
-        "access_token": token,
-        "token_type": "bearer"
-    }
+    return {"access_token": token, "token_type": "bearer"}
 
-# ================= LOAD MODELS =================
+# ================= LOAD ML MODELS =================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 diabetes_model = joblib.load(os.path.join(BASE_DIR, "diabetes_model.pkl"))
 heart_model = joblib.load(os.path.join(BASE_DIR, "heart_model.pkl"))
 
-# ================= PROTECTED HEART =================
+# ================= HEART =================
 
 @app.post("/heart-risk")
-def heart_risk(
-    data: HeartRiskInput,
-    current_user: User = Depends(get_current_user)
-):
+def heart_risk(data: HeartRiskInput,
+               current_user: User = Depends(get_current_user),
+               db: Session = Depends(get_db)):
+
     features = np.array([[ 
-        data.age,
-        data.sex,
-        data.trestbps,
-        data.chol,
-        data.thalach,
-        data.oldpeak
+        data.age, data.sex, data.trestbps,
+        data.chol, data.thalach, data.oldpeak
     ]])
 
-    prediction = heart_model.predict(features)[0]
     probability = heart_model.predict_proba(features)[0][1]
 
     risk_level = (
@@ -188,36 +207,95 @@ def heart_risk(
         else "High"
     )
 
+    db.add(HealthHistory(
+        user_id=current_user.id,
+        prediction_type="Heart",
+        risk_level=risk_level,
+        risk_score=float(probability)
+    ))
+    db.commit()
+
     return {
-        "prediction": int(prediction),
         "risk_level": risk_level,
         "risk_score": round(float(probability), 4)
     }
 
-# ================= PROTECTED DIABETES =================
+# ================= DIABETES =================
 
 @app.post("/diabetes-risk")
-def predict_diabetes(
-    data: DiabetesRiskInput,
-    current_user: User = Depends(get_current_user)
-):
-    input_data = np.array([[ 
-        data.Pregnancies,
-        data.Glucose,
-        data.BloodPressure,
-        data.SkinThickness,
-        data.Insulin,
-        data.BMI,
-        data.DiabetesPedigreeFunction,
-        data.Age
+def diabetes_risk(data: DiabetesRiskInput,
+                  current_user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+
+    features = np.array([[ 
+        data.Pregnancies, data.Glucose,
+        data.BloodPressure, data.SkinThickness,
+        data.Insulin, data.BMI,
+        data.DiabetesPedigreeFunction, data.Age
     ]])
 
-    prediction = diabetes_model.predict(input_data)[0]
-    probability = diabetes_model.predict_proba(input_data)[0][1]
+    probability = diabetes_model.predict_proba(features)[0][1]
 
-    risk_level = "High Risk" if prediction == 1 else "Low Risk"
+    risk_level = (
+        "Low" if probability < 0.4
+        else "Moderate" if probability < 0.7
+        else "High"
+    )
+
+    db.add(HealthHistory(
+        user_id=current_user.id,
+        prediction_type="Diabetes",
+        risk_level=risk_level,
+        risk_score=float(probability)
+    ))
+    db.commit()
 
     return {
-        "prediction": risk_level,
-        "risk_probability": round(float(probability), 3)
+        "risk_level": risk_level,
+        "risk_score": round(float(probability), 4)
     }
+
+# ================= HISTORY =================
+
+@app.get("/my-history")
+def get_history(current_user: User = Depends(get_current_user),
+                db: Session = Depends(get_db)):
+
+    records = db.query(HealthHistory)\
+        .filter(HealthHistory.user_id == current_user.id)\
+        .order_by(HealthHistory.created_at.desc())\
+        .all()
+
+    return [
+        {
+            "type": r.prediction_type,
+            "risk_level": r.risk_level,
+            "risk_score": r.risk_score,
+            "date": r.created_at
+        }
+        for r in records
+    ]
+
+# ================= AI CHAT =================
+
+@app.post("/chat")
+def chat_assistant(data: ChatRequest,
+                   current_user: User = Depends(get_current_user)):
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful AI health assistant. Provide general advice only. Always recommend consulting a doctor for serious issues."
+                },
+                {"role": "user", "content": data.message}
+            ]
+        )
+
+        reply = response.choices[0].message.content
+        return {"reply": reply}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
