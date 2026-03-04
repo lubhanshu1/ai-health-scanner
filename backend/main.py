@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./health.db")
+DATABASE_URL = "sqlite:///./users.db"
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecret")
 
 ALGORITHM = "HS256"
@@ -43,11 +43,12 @@ def home():
 
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+    connect_args={"check_same_thread": False}
 )
 
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
 
 class User(Base):
     __tablename__ = "users"
@@ -82,6 +83,7 @@ def get_db():
     finally:
         db.close()
 
+
 # ================= AUTH =================
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -107,6 +109,7 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
+
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -121,6 +124,7 @@ def get_current_user(
 
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
 
 # ================= REQUEST MODELS =================
 
@@ -156,6 +160,7 @@ class DiabetesRiskInput(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+
 
 # ================= AUTH ROUTES =================
 
@@ -193,6 +198,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         "token_type": "bearer"
     }
 
+
 # ================= LOAD ML MODELS =================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -205,6 +211,7 @@ except Exception as e:
     print("Model loading error:", e)
     diabetes_model = None
     heart_model = None
+
 
 # ================= HEART RISK =================
 
@@ -244,6 +251,7 @@ def heart_risk(
         "risk_level": level,
         "risk_score": float(prob)
     }
+
 
 # ================= DIABETES RISK =================
 
@@ -286,6 +294,7 @@ def diabetes_risk(
         "risk_score": float(prob)
     }
 
+
 # ================= HISTORY =================
 
 @app.get("/history")
@@ -308,6 +317,7 @@ def history(
         }
         for r in records
     ]
+
 
 # ================= AI CHAT =================
 
