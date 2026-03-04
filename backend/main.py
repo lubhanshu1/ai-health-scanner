@@ -6,41 +6,26 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.orm import sessionmaker, declarative_base, Session, relationship
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from dotenv import load_dotenv
-from openai import OpenAI
 
 # ================= LOAD ENV =================
 
-load_dotenv()  # works locally, ignored on Render
+load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-SECRET_KEY = os.getenv("SECRET_KEY")
-
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL not set")
-
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY not set")
-
-if not SECRET_KEY:
-    raise ValueError("SECRET_KEY not set")
-
-client = OpenAI(api_key=OPENAI_API_KEY)
-
-# ================= CONFIG =================
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./health.db")
+SECRET_KEY = os.getenv("SECRET_KEY", "supersecret")
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 # ================= APP =================
 
-app = FastAPI(title="AI Health Platform - Production Ready")
+app = FastAPI(title="AI Health Scanner - ML Powered")
 
 app.add_middleware(
     CORSMiddleware,
@@ -50,18 +35,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Health check route (important for Render)
 @app.get("/")
-def health_check():
-    return {"status": "AI Health API is running"}
+def home():
+    return {"message": "AI Health API Running"}
 
 # ================= DATABASE =================
 
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 )
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -69,14 +51,18 @@ Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
+
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
+    email = Column(String, unique=True)
     password = Column(String)
+
     history = relationship("HealthHistory", back_populates="user")
+
 
 class HealthHistory(Base):
     __tablename__ = "health_history"
-    id = Column(Integer, primary_key=True, index=True)
+
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     prediction_type = Column(String)
     risk_level = Column(String)
@@ -85,7 +71,9 @@ class HealthHistory(Base):
 
     user = relationship("User", back_populates="history")
 
+
 Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     db = SessionLocal()
@@ -99,17 +87,21 @@ def get_db():
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-def hash_password(password: str):
+
+def hash_password(password):
     return pwd_context.hash(password)
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
 
-def create_access_token(data: dict):
+def verify_password(plain, hashed):
+    return pwd_context.verify(plain, hashed)
+
+
+def create_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -120,12 +112,9 @@ def get_current_user(
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
 
-        if email is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
         user = db.query(User).filter(User.email == email).first()
 
-        if user is None:
+        if not user:
             raise HTTPException(status_code=401, detail="User not found")
 
         return user
@@ -139,17 +128,20 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
 
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+
 class HeartRiskInput(BaseModel):
-    age: int = Field(..., ge=1, le=120)
-    sex: int = Field(..., ge=0, le=1)
+    age: int
+    sex: int
     trestbps: float
     chol: float
     thalach: float
     oldpeak: float
+
 
 class DiabetesRiskInput(BaseModel):
     Pregnancies: int
@@ -161,6 +153,7 @@ class DiabetesRiskInput(BaseModel):
     DiabetesPedigreeFunction: float
     Age: int
 
+
 class ChatRequest(BaseModel):
     message: str
 
@@ -168,122 +161,150 @@ class ChatRequest(BaseModel):
 
 @app.post("/register")
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == data.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
 
-    new_user = User(
+    existing_user = db.query(User).filter(User.email == data.email).first()
+
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already exists")
+
+    user = User(
         email=data.email,
         password=hash_password(data.password)
     )
 
-    db.add(new_user)
+    db.add(user)
     db.commit()
-    db.refresh(new_user)
 
     return {"message": "User registered successfully"}
 
+
 @app.post("/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
+
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not verify_password(data.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token({"sub": user.email})
+    token = create_token({"sub": user.email})
 
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }
 
 # ================= LOAD ML MODELS =================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-diabetes_model = joblib.load(os.path.join(BASE_DIR, "diabetes_model.pkl"))
-heart_model = joblib.load(os.path.join(BASE_DIR, "heart_model.pkl"))
 
-# ================= HEART =================
+try:
+    diabetes_model = joblib.load(os.path.join(BASE_DIR, "diabetes_model.pkl"))
+    heart_model = joblib.load(os.path.join(BASE_DIR, "heart_model.pkl"))
+    print("ML models loaded successfully")
+except Exception as e:
+    print("Model loading error:", e)
+    diabetes_model = None
+    heart_model = None
+
+# ================= HEART RISK =================
 
 @app.post("/heart-risk")
-def heart_risk(data: HeartRiskInput,
-               current_user: User = Depends(get_current_user),
-               db: Session = Depends(get_db)):
+def heart_risk(
+    data: HeartRiskInput,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+
+    if heart_model is None:
+        raise HTTPException(status_code=500, detail="Heart model not loaded")
 
     features = np.array([[ 
-        data.age, data.sex, data.trestbps,
-        data.chol, data.thalach, data.oldpeak
+        data.age,
+        data.sex,
+        data.trestbps,
+        data.chol,
+        data.thalach,
+        data.oldpeak
     ]])
 
-    probability = heart_model.predict_proba(features)[0][1]
+    prob = heart_model.predict_proba(features)[0][1]
 
-    risk_level = (
-        "Low" if probability < 0.4
-        else "Moderate" if probability < 0.7
-        else "High"
-    )
+    level = "Low" if prob < 0.4 else "Moderate" if prob < 0.7 else "High"
 
     db.add(HealthHistory(
-        user_id=current_user.id,
+        user_id=user.id,
         prediction_type="Heart",
-        risk_level=risk_level,
-        risk_score=float(probability)
+        risk_level=level,
+        risk_score=float(prob)
     ))
+
     db.commit()
 
     return {
-        "risk_level": risk_level,
-        "risk_score": round(float(probability), 4)
+        "risk_level": level,
+        "risk_score": float(prob)
     }
 
-# ================= DIABETES =================
+# ================= DIABETES RISK =================
 
 @app.post("/diabetes-risk")
-def diabetes_risk(data: DiabetesRiskInput,
-                  current_user: User = Depends(get_current_user),
-                  db: Session = Depends(get_db)):
+def diabetes_risk(
+    data: DiabetesRiskInput,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+
+    if diabetes_model is None:
+        raise HTTPException(status_code=500, detail="Diabetes model not loaded")
 
     features = np.array([[ 
-        data.Pregnancies, data.Glucose,
-        data.BloodPressure, data.SkinThickness,
-        data.Insulin, data.BMI,
-        data.DiabetesPedigreeFunction, data.Age
+        data.Pregnancies,
+        data.Glucose,
+        data.BloodPressure,
+        data.SkinThickness,
+        data.Insulin,
+        data.BMI,
+        data.DiabetesPedigreeFunction,
+        data.Age
     ]])
 
-    probability = diabetes_model.predict_proba(features)[0][1]
+    prob = diabetes_model.predict_proba(features)[0][1]
 
-    risk_level = (
-        "Low" if probability < 0.4
-        else "Moderate" if probability < 0.7
-        else "High"
-    )
+    level = "Low" if prob < 0.4 else "Moderate" if prob < 0.7 else "High"
 
     db.add(HealthHistory(
-        user_id=current_user.id,
+        user_id=user.id,
         prediction_type="Diabetes",
-        risk_level=risk_level,
-        risk_score=float(probability)
+        risk_level=level,
+        risk_score=float(prob)
     ))
+
     db.commit()
 
     return {
-        "risk_level": risk_level,
-        "risk_score": round(float(probability), 4)
+        "risk_level": level,
+        "risk_score": float(prob)
     }
 
 # ================= HISTORY =================
 
-@app.get("/my-history")
-def get_history(current_user: User = Depends(get_current_user),
-                db: Session = Depends(get_db)):
+@app.get("/history")
+def history(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
 
     records = db.query(HealthHistory)\
-        .filter(HealthHistory.user_id == current_user.id)\
+        .filter(HealthHistory.user_id == user.id)\
         .order_by(HealthHistory.created_at.desc())\
         .all()
 
     return [
         {
-            "type": r.prediction_type,
+            "prediction_type": r.prediction_type,
             "risk_level": r.risk_level,
             "risk_score": r.risk_score,
-            "date": r.created_at
+            "created_at": r.created_at
         }
         for r in records
     ]
@@ -291,23 +312,20 @@ def get_history(current_user: User = Depends(get_current_user),
 # ================= AI CHAT =================
 
 @app.post("/chat")
-def chat_assistant(data: ChatRequest,
-                   current_user: User = Depends(get_current_user)):
+def chat(data: ChatRequest):
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful AI health assistant. Provide general advice only. Always recommend consulting a doctor."
-                },
-                {"role": "user", "content": data.message}
-            ]
-        )
+    message = data.message.lower()
 
-        reply = response.choices[0].message.content
-        return {"reply": reply}
+    if "hello" in message or "hi" in message:
+        reply = "Hello! I am your AI Health Assistant. How can I help you today?"
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    elif "diabetes" in message:
+        reply = "Diabetes is a disease where blood sugar levels become high. Maintaining diet and exercise helps control it."
+
+    elif "heart" in message:
+        reply = "Heart disease risk increases with smoking, high cholesterol, and lack of exercise."
+
+    else:
+        reply = "I recommend consulting a doctor for proper medical advice."
+
+    return {"reply": reply}
