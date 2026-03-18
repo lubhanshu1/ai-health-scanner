@@ -1,33 +1,45 @@
 const API_URL = "https://ai-health-backend-g329.onrender.com/predict-simple";
 
+let chart;
+
 document.getElementById("healthForm").addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const data = {
-        age: parseFloat(document.getElementById("age").value),
-        glucose: parseFloat(document.getElementById("glucose").value),
-        bp: parseFloat(document.getElementById("bp").value),
-        bmi: parseFloat(document.getElementById("bmi").value)
+        age: +age.value,
+        glucose: +glucose.value,
+        bp: +bp.value,
+        bmi: +bmi.value
     };
 
-    document.getElementById("result").innerHTML = "⏳ Predicting...";
+    result.innerHTML = "⏳ Predicting...";
 
-    try {
-        const res = await fetch(API_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(data)
-        });
+    const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    });
 
-        const result = await res.json();
+    const r = await res.json();
 
-        document.getElementById("result").innerHTML =
-            "✅ Prediction: " + JSON.stringify(result);
+    // UI
+    result.innerHTML = `
+        <b>Risk:</b> ${r.risk_level} <br>
+        <b>Score:</b> ${r.risk_score}
+    `;
 
-    } catch (error) {
-        document.getElementById("result").innerHTML =
-            "❌ Error connecting to backend";
-    }
+    // GRAPH
+    const ctx = document.getElementById('riskChart');
+
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Risk', 'Safe'],
+            datasets: [{
+                data: [r.risk_score * 100, 100 - (r.risk_score * 100)]
+            }]
+        }
+    });
 });

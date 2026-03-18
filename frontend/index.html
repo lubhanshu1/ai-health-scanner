@@ -2,25 +2,41 @@
 <html lang="en">
 
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Health Scanner</title>
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <div class="container">
-        <h1>🧠 AI Health Scanner</h1>
+    <div class="main">
 
-        <form id="healthForm">
-            <input type="number" id="age" placeholder="Age" required>
-            <input type="number" id="glucose" placeholder="Glucose Level" required>
-            <input type="number" id="bp" placeholder="Blood Pressure" required>
-            <input type="number" id="bmi" placeholder="BMI" required>
+        <div class="card">
+            <h1>🧠 AI Health Scanner</h1>
 
-            <button type="submit">Predict</button>
-        </form>
+            <form id="healthForm">
+                <input type="number" id="age" placeholder="Age" required>
+                <input type="number" id="glucose" placeholder="Glucose Level" required>
+                <input type="number" id="bp" placeholder="Blood Pressure" required>
+                <input type="number" id="bmi" placeholder="BMI" required>
 
-        <div id="result"></div>
+                <button type="submit" id="predictBtn">Predict</button>
+            </form>
+
+            <div id="result"></div>
+
+            <!-- Graph -->
+            <canvas id="riskChart"></canvas>
+        </div>
+
     </div>
 
     <script src="script.js"></script>
