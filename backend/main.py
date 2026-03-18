@@ -52,17 +52,14 @@ Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
-
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True)
     password = Column(String)
-
     history = relationship("HealthHistory", back_populates="user")
 
 
 class HealthHistory(Base):
     __tablename__ = "health_history"
-
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     prediction_type = Column(String)
@@ -82,7 +79,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
 
 # ================= AUTH =================
 
@@ -109,7 +105,6 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -125,8 +120,7 @@ def get_current_user(
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-
-# ================= REQUEST MODELS =================
+# ================= MODELS =================
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -158,25 +152,24 @@ class DiabetesRiskInput(BaseModel):
     Age: int
 
 
+class SimpleInput(BaseModel):
+    age: float
+    glucose: float
+    bp: float
+    bmi: float
+
+
 class ChatRequest(BaseModel):
     message: str
-
 
 # ================= AUTH ROUTES =================
 
 @app.post("/register")
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
-
-    existing_user = db.query(User).filter(User.email == data.email).first()
-
-    if existing_user:
+    if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    user = User(
-        email=data.email,
-        password=hash_password(data.password)
-    )
-
+    user = User(email=data.email, password=hash_password(data.password))
     db.add(user)
     db.commit()
 
@@ -185,7 +178,6 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
 @app.post("/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not verify_password(data.password, user.password):
@@ -193,13 +185,9 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_token({"sub": user.email})
 
-    return {
-        "access_token": token,
-        "token_type": "bearer"
-    }
+    return {"access_token": token, "token_type": "bearer"}
 
-
-# ================= LOAD ML MODELS =================
+# ================= LOAD MODELS =================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -212,130 +200,110 @@ except Exception as e:
     diabetes_model = None
     heart_model = None
 
+# ================= SIMPLE PREDICT (NO LOGIN) =================
 
-# ================= HEART RISK =================
-
-@app.post("/heart-risk")
-def heart_risk(
-    data: HeartRiskInput,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-
-    if heart_model is None:
-        raise HTTPException(status_code=500, detail="Heart model not loaded")
-
-    features = np.array([[ 
-        data.age,
-        data.sex,
-        data.trestbps,
-        data.chol,
-        data.thalach,
-        data.oldpeak
-    ]])
-
-    prob = heart_model.predict_proba(features)[0][1]
-
-    level = "Low" if prob < 0.4 else "Moderate" if prob < 0.7 else "High"
-
-    db.add(HealthHistory(
-        user_id=user.id,
-        prediction_type="Heart",
-        risk_level=level,
-        risk_score=float(prob)
-    ))
-
-    db.commit()
-
-    return {
-        "risk_level": level,
-        "risk_score": float(prob)
-    }
-
-
-# ================= DIABETES RISK =================
-
-@app.post("/diabetes-risk")
-def diabetes_risk(
-    data: DiabetesRiskInput,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+@app.post("/predict-simple")
+def predict_simple(data: SimpleInput):
 
     if diabetes_model is None:
-        raise HTTPException(status_code=500, detail="Diabetes model not loaded")
+        raise HTTPException(status_code=500, detail="Model not loaded")
 
-    features = np.array([[ 
-        data.Pregnancies,
-        data.Glucose,
-        data.BloodPressure,
-        data.SkinThickness,
-        data.Insulin,
-        data.BMI,
-        data.DiabetesPedigreeFunction,
-        data.Age
-    ]])
+    try:
+        features = np.array([[ 
+            0,
+            data.glucose,
+            data.bp,
+            0,
+            0,
+            data.bmi,
+            0.5,
+            data.age
+        ]])
 
-    prob = diabetes_model.predict_proba(features)[0][1]
+        prob = diabetes_model.predict_proba(features)[0][1]
+        level = "Low" if prob < 0.4 else "Moderate" if prob < 0.7 else "High"
 
+        return {
+            "risk_level": level,
+            "risk_score": float(prob)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ================= HEART =================
+
+@app.post("/heart-risk")
+def heart_risk(data: HeartRiskInput,
+               user: User = Depends(get_current_user),
+               db: Session = Depends(get_db)):
+
+    features = np.array([[data.age, data.sex, data.trestbps,
+                          data.chol, data.thalach, data.oldpeak]])
+
+    prob = heart_model.predict_proba(features)[0][1]
     level = "Low" if prob < 0.4 else "Moderate" if prob < 0.7 else "High"
 
-    db.add(HealthHistory(
-        user_id=user.id,
-        prediction_type="Diabetes",
-        risk_level=level,
-        risk_score=float(prob)
-    ))
-
+    db.add(HealthHistory(user_id=user.id,
+                         prediction_type="Heart",
+                         risk_level=level,
+                         risk_score=float(prob)))
     db.commit()
 
-    return {
-        "risk_level": level,
-        "risk_score": float(prob)
-    }
+    return {"risk_level": level, "risk_score": float(prob)}
 
+# ================= DIABETES =================
+
+@app.post("/diabetes-risk")
+def diabetes_risk(data: DiabetesRiskInput,
+                  user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+
+    features = np.array([[data.Pregnancies, data.Glucose, data.BloodPressure,
+                          data.SkinThickness, data.Insulin, data.BMI,
+                          data.DiabetesPedigreeFunction, data.Age]])
+
+    prob = diabetes_model.predict_proba(features)[0][1]
+    level = "Low" if prob < 0.4 else "Moderate" if prob < 0.7 else "High"
+
+    db.add(HealthHistory(user_id=user.id,
+                         prediction_type="Diabetes",
+                         risk_level=level,
+                         risk_score=float(prob)))
+    db.commit()
+
+    return {"risk_level": level, "risk_score": float(prob)}
 
 # ================= HISTORY =================
 
 @app.get("/history")
-def history(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def history(user: User = Depends(get_current_user),
+            db: Session = Depends(get_db)):
 
-    records = db.query(HealthHistory)\
-        .filter(HealthHistory.user_id == user.id)\
-        .order_by(HealthHistory.created_at.desc())\
-        .all()
+    records = db.query(HealthHistory).filter(
+        HealthHistory.user_id == user.id).all()
 
-    return [
-        {
-            "prediction_type": r.prediction_type,
-            "risk_level": r.risk_level,
-            "risk_score": r.risk_score,
-            "created_at": r.created_at
-        }
-        for r in records
-    ]
+    return [{
+        "type": r.prediction_type,
+        "risk": r.risk_level,
+        "score": r.risk_score,
+        "time": r.created_at
+    } for r in records]
 
-
-# ================= AI CHAT =================
+# ================= CHAT =================
 
 @app.post("/chat")
 def chat(data: ChatRequest):
 
-    message = data.message.lower()
+    msg = data.message.lower()
 
-    if "hello" in message or "hi" in message:
-        reply = "Hello! I am your AI Health Assistant. How can I help you today?"
-
-    elif "diabetes" in message:
-        reply = "Diabetes is a disease where blood sugar levels become high. Maintaining diet and exercise helps control it."
-
-    elif "heart" in message:
-        reply = "Heart disease risk increases with smoking, high cholesterol, and lack of exercise."
-
+    if "hello" in msg:
+        reply = "Hello! I'm your AI Health Assistant."
+    elif "diabetes" in msg:
+        reply = "Maintain diet & exercise to control diabetes."
+    elif "heart" in msg:
+        reply = "Heart health depends on lifestyle & cholesterol."
     else:
-        reply = "I recommend consulting a doctor for proper medical advice."
+        reply = "Please consult a doctor for medical advice."
 
     return {"reply": reply}
