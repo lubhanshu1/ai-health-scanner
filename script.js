@@ -6,12 +6,13 @@ let mode = "simple";
 
 let chatHistory = JSON.parse(localStorage.getItem("chatHistory")) || [];
 
-// ================= GET ELEMENTS =================
+// ================= ELEMENTS =================
 const loginPage = document.getElementById("loginPage");
 const dashboard = document.getElementById("dashboard");
 const profileBox = document.getElementById("profileBox");
 const historyDiv = document.getElementById("history");
 const resultDiv = document.getElementById("result");
+const loginStatus = document.getElementById("loginStatus");
 
 // ================= AUTO LOAD =================
 window.onload = () => {
@@ -56,6 +57,8 @@ function setMode(selected) {
 async function login() {
     const emailVal = document.getElementById("email").value;
     const passwordVal = document.getElementById("password").value;
+
+    loginStatus.innerText = "⏳ Logging in...";
 
     try {
         const res = await fetch(`${API_URL}/login`, {
@@ -133,7 +136,11 @@ async function loadProfile() {
 // ================= AVATAR =================
 async function uploadAvatar() {
     const file = document.getElementById("avatarInput").files[0];
-    if (!file) return alert("Select image");
+
+    if (!file) {
+        alert("Please select an image 📸");
+        return;
+    }
 
     const reader = new FileReader();
 
@@ -169,7 +176,7 @@ async function loadHistory() {
         historyDiv.innerHTML = "";
 
         if (data.length === 0) {
-            historyDiv.innerHTML = "<p>No history yet</p>";
+            historyDiv.innerHTML = "<p style='opacity:0.7'>No records yet 📭</p>";
             return;
         }
 
@@ -215,7 +222,8 @@ function showAnalyticsChart(data) {
             labels: ["Low", "Moderate", "High"],
             datasets: [{
                 label: "Risk Distribution",
-                data: [data.low, data.moderate, data.high]
+                data: [data.low, data.moderate, data.high],
+                backgroundColor: ["#00ff9f", "#ffcc00", "#ff4d6d"]
             }]
         }
     });
@@ -247,7 +255,7 @@ document.addEventListener("DOMContentLoaded", () => {
             body = { Pregnancies: +preg.value, Glucose: +d_glucose.value, BloodPressure: +pressure.value, SkinThickness: +skin.value, Insulin: +insulin.value, BMI: +d_bmi.value, DiabetesPedigreeFunction: +dpf.value, Age: +d_age.value };
         }
 
-        resultDiv.innerHTML = "<div class='loader'></div>";
+        resultDiv.innerHTML = "⏳ Predicting...";
 
         try {
             const res = await fetch(API_URL + url, {
