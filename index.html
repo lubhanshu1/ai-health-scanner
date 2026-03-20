@@ -47,9 +47,9 @@
             <hr>
 
             <!-- NAV -->
-            <button onclick="setMode('simple')">🟢 Simple</button>
-            <button onclick="setMode('heart')">❤️ Heart</button>
-            <button onclick="setMode('diabetes')">🩸 Diabetes</button>
+            <button onclick="setMode('simple', event)">🟢 Simple</button>
+            <button onclick="setMode('heart', event)">❤️ Heart</button>
+            <button onclick="setMode('diabetes', event)">🩸 Diabetes</button>
 
             <hr>
 
@@ -88,7 +88,7 @@
                     <input type="number" id="preg" placeholder="Pregnancies">
                     <input type="number" id="d_glucose" placeholder="Glucose">
                     <input type="number" id="pressure" placeholder="BP">
-                    <input type="number" id="skin" placeholder="Skin">
+                    <input type="number" id="skin" placeholder="Skin Thickness">
                     <input type="number" id="insulin" placeholder="Insulin">
                     <input type="number" id="d_bmi" placeholder="BMI">
                     <input type="number" id="dpf" placeholder="DPF">
@@ -125,8 +125,10 @@
         <div class="chat-body hidden" id="chatBody">
             <div id="chatMessages"></div>
 
-            <input type="text" id="chatInput" placeholder="Ask something...">
-            <button onclick="sendMessage()">Send</button>
+            <div style="display:flex; gap:5px;">
+                <input type="text" id="chatInput" placeholder="Ask something...">
+                <button onclick="sendMessage()">Send</button>
+            </div>
         </div>
     </div>
 

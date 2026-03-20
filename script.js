@@ -43,7 +43,7 @@ function showLogin() {
 }
 
 // ================= MODE =================
-function setMode(selected) {
+function setMode(selected, event) {
     mode = selected;
 
     ["simpleFields", "heartFields", "diabetesFields"].forEach(id =>
@@ -51,6 +51,15 @@ function setMode(selected) {
     );
 
     document.getElementById(mode + "Fields").classList.remove("hidden");
+
+    // 🔥 ACTIVE BUTTON
+    document.querySelectorAll(".sidebar button").forEach(btn => {
+        btn.classList.remove("active");
+    });
+
+    if (event) {
+        event.target.classList.add("active");
+    }
 }
 
 // ================= LOGIN =================
@@ -223,8 +232,26 @@ function showAnalyticsChart(data) {
             datasets: [{
                 label: "Risk Distribution",
                 data: [data.low, data.moderate, data.high],
-                backgroundColor: ["#00ff9f", "#ffcc00", "#ff4d6d"]
+                backgroundColor: ["#00ff9f", "#ffcc00", "#ff4d6d"],
+                borderRadius: 10
             }]
+        },
+        options: {
+            plugins: {
+                legend: {
+                    labels: { color: "white" }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: "white" },
+                    grid: { color: "rgba(255,255,255,0.1)" }
+                },
+                y: {
+                    ticks: { color: "white" },
+                    grid: { color: "rgba(255,255,255,0.1)" }
+                }
+            }
         }
     });
 }
