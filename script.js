@@ -46,8 +46,8 @@ function setMode(selected) {
 
 // ================= LOGIN =================
 async function login() {
-    const email = emailInput.value;
-    const password = passwordInput.value;
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
 
     try {
         const res = await fetch(`${API_URL}/login`, {
@@ -68,17 +68,17 @@ async function login() {
             loadHistory();
 
         } else {
-            loginStatus.innerText = data.detail;
+            document.getElementById("loginStatus").innerText = data.detail;
         }
     } catch {
-        loginStatus.innerText = "❌ Server error";
+        document.getElementById("loginStatus").innerText = "❌ Server error";
     }
 }
 
 // ================= REGISTER =================
 async function register() {
-    const email = emailInput.value;
-    const password = passwordInput.value;
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
 
     try {
         const res = await fetch(`${API_URL}/register`, {
@@ -168,7 +168,6 @@ document.addEventListener("DOMContentLoaded", () => {
         let body = {};
         const token = localStorage.getItem("token");
 
-        // ===== SIMPLE =====
         if (mode === "simple") {
             url = "/predict-simple";
             body = {
@@ -178,8 +177,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 bmi: +bmi.value
             };
         }
-
-        // ===== HEART =====
         else if (mode === "heart") {
             if (!token) return alert("Login required");
 
@@ -193,8 +190,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 oldpeak: +oldpeak.value
             };
         }
-
-        // ===== DIABETES =====
         else {
             if (!token) return alert("Login required");
 
@@ -240,7 +235,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             showChart(score);
             playSound();
-            loadHistory(); // 🔥 refresh backend history
+            loadHistory();
 
         } catch {
             result.innerText = "❌ Server not responding";
