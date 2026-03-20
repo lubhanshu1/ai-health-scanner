@@ -3,7 +3,7 @@ const API_URL = "https://ai-health-backend-g329.onrender.com";
 let chart;
 let mode = "simple";
 
-// 🧠 CHAT MEMORY
+// ================= CHAT MEMORY =================
 let chatHistory = JSON.parse(localStorage.getItem("chatHistory")) || [];
 
 // ================= AUTO LOAD =================
@@ -60,16 +60,13 @@ async function login() {
 
         if (res.ok) {
             localStorage.setItem("token", data.access_token);
-
-            alert("Welcome 🚀");
-
             showDashboard();
             loadProfile();
             loadHistory();
-
         } else {
             document.getElementById("loginStatus").innerText = data.detail;
         }
+
     } catch {
         document.getElementById("loginStatus").innerText = "❌ Server error";
     }
@@ -89,6 +86,7 @@ async function register() {
 
         const data = await res.json();
         alert(data.message || data.detail);
+
     } catch {
         alert("❌ Server error");
     }
@@ -112,16 +110,33 @@ async function loadProfile() {
 
         const user = await res.json();
 
-        const box = document.getElementById("profileBox");
-        if (!box) return;
-
-        box.innerHTML = `
-            <img src="${user.avatar}" width="50" style="border-radius:50%">
+        document.getElementById("profileBox").innerHTML = `
+            <img src="${user.avatar}" width="60" style="border-radius:50%;margin-bottom:10px;">
             <p>${user.email}</p>
+            <button onclick="uploadAvatar()">Change Avatar</button>
         `;
     } catch {
-        console.log("Profile load error");
+        console.log("Profile error");
     }
+}
+
+// ================= AVATAR =================
+async function uploadAvatar() {
+    const url = prompt("Enter image URL:");
+    if (!url) return;
+
+    const token = localStorage.getItem("token");
+
+    await fetch(`${API_URL}/upload-avatar`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ avatar: url })
+    });
+
+    loadProfile();
 }
 
 // ================= HISTORY =================
@@ -136,14 +151,21 @@ async function loadHistory() {
             headers: { Authorization: `Bearer ${token}` }
         });
 
+        if (!res.ok) throw new Error();
+
         const data = await res.json();
 
         historyDiv.innerHTML = "";
 
-        data.reverse().slice(0, 5).forEach(item => {
+        if (data.length === 0) {
+            historyDiv.innerHTML = "<p>No history yet</p>";
+            return;
+        }
+
+        data.slice(0, 5).forEach(item => {
             historyDiv.innerHTML += `
                 <div class="history-card">
-                    <b>${item.type}</b> - ${item.risk} (${(item.score * 100).toFixed(1)}%)
+                    <b>${item.type}</b> - ${item.risk} (${item.score}%)
                 </div>
             `;
         });
@@ -155,18 +177,19 @@ async function loadHistory() {
 
 // ================= SOUND =================
 function playSound() {
-    const audio = new Audio("https://www.soundjay.com/buttons/sounds/button-3.mp3");
-    audio.play();
+    new Audio("https://www.soundjay.com/buttons/sounds/button-3.mp3").play();
 }
 
 // ================= PREDICT =================
 document.addEventListener("DOMContentLoaded", () => {
+
     document.getElementById("healthForm").addEventListener("submit", async (e) => {
         e.preventDefault();
 
+        const token = localStorage.getItem("token");
+
         let url = "";
         let body = {};
-        const token = localStorage.getItem("token");
 
         if (mode === "simple") {
             url = "/predict-simple";
@@ -176,10 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 bp: +bp.value,
                 bmi: +bmi.value
             };
-        }
-        else if (mode === "heart") {
-            if (!token) return alert("Login required");
-
+        } else if (mode === "heart") {
             url = "/heart-risk";
             body = {
                 age: +h_age.value,
@@ -189,10 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 thalach: +thalach.value,
                 oldpeak: +oldpeak.value
             };
-        }
-        else {
-            if (!token) return alert("Login required");
-
+        } else {
             url = "/diabetes-risk";
             body = {
                 Pregnancies: +preg.value,
@@ -214,7 +231,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    ...(mode !== "simple" && { Authorization: `Bearer ${token}` })
+                    Authorization: `Bearer ${token}` // 🔥 FIXED
                 },
                 body: JSON.stringify(body)
             });
@@ -275,6 +292,9 @@ async function sendMessage() {
     box.innerHTML += `<p>🧑 ${msg}</p>`;
     input.value = "";
 
+    chatHistory.push({ role: "user", content: msg });
+    localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
+
     try {
         const res = await fetch(`${API_URL}/chat`, {
             method: "POST",
@@ -285,6 +305,9 @@ async function sendMessage() {
         const data = await res.json();
 
         box.innerHTML += `<p>🤖 ${data.reply}</p>`;
+
+        chatHistory.push({ role: "bot", content: data.reply });
+        localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
 
     } catch {
         box.innerHTML += `<p>❌ Error</p>`;
