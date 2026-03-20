@@ -36,10 +36,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def home():
-    return {"message": "AI Health API Running 🚀"}
-
 # ================= DATABASE =================
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
@@ -52,8 +48,6 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     email = Column(String, unique=True, index=True)
     password = Column(String)
-
-    # 🔥 Avatar support
     avatar = Column(String, default="https://i.pravatar.cc/150")
 
     history = relationship("HealthHistory", back_populates="user")
@@ -100,6 +94,7 @@ def create_token(data: dict):
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security),
                      db: Session = Depends(get_db)):
+
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
@@ -152,9 +147,10 @@ class DiabetesRiskInput(BaseModel):
 class ChatRequest(BaseModel):
     message: str
 
-# ================= AUTH ROUTES =================
+# ================= AUTH =================
 @app.post("/register")
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
+
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
 
@@ -165,6 +161,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
 @app.post("/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
+
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not verify_password(data.password, user.password):
@@ -172,15 +169,12 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_token({"sub": user.email})
 
-    return {"access_token": token, "token_type": "bearer"}
+    return {"access_token": token}
 
 # ================= PROFILE =================
 @app.get("/profile")
 def profile(user: User = Depends(get_current_user)):
-    return {
-        "email": user.email,
-        "avatar": user.avatar
-    }
+    return {"email": user.email, "avatar": user.avatar}
 
 @app.post("/upload-avatar")
 def upload_avatar(data: AvatarUpdate,
@@ -189,29 +183,34 @@ def upload_avatar(data: AvatarUpdate,
 
     user.avatar = data.avatar
     db.commit()
-
     return {"message": "Avatar updated"}
 
-# ================= LOAD ML =================
+# ================= LOAD MODELS =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-try:
-    diabetes_model = joblib.load(os.path.join(BASE_DIR, "diabetes_model.pkl"))
-    heart_model = joblib.load(os.path.join(BASE_DIR, "heart_model.pkl"))
-    print("✅ ML models loaded")
-except Exception as e:
-    print("❌ ML ERROR:", e)
-    diabetes_model = heart_model = None
+diabetes_model = joblib.load(os.path.join(BASE_DIR, "diabetes_model.pkl"))
+heart_model = joblib.load(os.path.join(BASE_DIR, "heart_model.pkl"))
+
+# ================= SAVE FUNCTION =================
+def save_history(db, user, type_, level, prob):
+    db.add(HealthHistory(
+        user_id=user.id,
+        prediction_type=type_,
+        risk_level=level,
+        risk_score=prob
+    ))
+    db.commit()
 
 # ================= PREDICTIONS =================
 @app.post("/predict-simple")
-def predict_simple(data: SimpleInput):
-
-    if diabetes_model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
+def predict_simple(data: SimpleInput,
+                   user: User = Depends(get_current_user),
+                   db: Session = Depends(get_db)):
 
     prob = float(diabetes_model.predict_proba([[0, data.glucose, data.bp, 0, 0, data.bmi, 0.5, data.age]])[0][1])
     level = "Low" if prob < 0.4 else "Moderate" if prob < 0.7 else "High"
+
+    save_history(db, user, "Simple", level, prob)
 
     return {"risk_level": level, "risk_score": prob}
 
@@ -221,17 +220,12 @@ def heart_risk(data: HeartRiskInput,
                user: User = Depends(get_current_user),
                db: Session = Depends(get_db)):
 
-    if heart_model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
-
     prob = float(heart_model.predict_proba([[data.age, data.sex, data.trestbps,
                                             data.chol, data.thalach, data.oldpeak]])[0][1])
 
     level = "Low" if prob < 0.4 else "Moderate" if prob < 0.7 else "High"
 
-    db.add(HealthHistory(user_id=user.id, prediction_type="Heart",
-                         risk_level=level, risk_score=prob))
-    db.commit()
+    save_history(db, user, "Heart", level, prob)
 
     return {"risk_level": level, "risk_score": prob}
 
@@ -241,18 +235,13 @@ def diabetes_risk(data: DiabetesRiskInput,
                   user: User = Depends(get_current_user),
                   db: Session = Depends(get_db)):
 
-    if diabetes_model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
-
     prob = float(diabetes_model.predict_proba([[data.Pregnancies, data.Glucose, data.BloodPressure,
                                                data.SkinThickness, data.Insulin, data.BMI,
                                                data.DiabetesPedigreeFunction, data.Age]])[0][1])
 
     level = "Low" if prob < 0.4 else "Moderate" if prob < 0.7 else "High"
 
-    db.add(HealthHistory(user_id=user.id, prediction_type="Diabetes",
-                         risk_level=level, risk_score=prob))
-    db.commit()
+    save_history(db, user, "Diabetes", level, prob)
 
     return {"risk_level": level, "risk_score": prob}
 
@@ -270,26 +259,41 @@ def history(user: User = Depends(get_current_user),
         "type": r.prediction_type,
         "risk": r.risk_level,
         "score": round(r.risk_score * 100, 1),
-        "time": r.created_at
+        "time": str(r.created_at)
     } for r in records]
 
-# ================= AI CHAT =================
+# ================= ANALYTICS (NEW 🔥) =================
+@app.get("/analytics")
+def analytics(user: User = Depends(get_current_user),
+              db: Session = Depends(get_db)):
+
+    records = db.query(HealthHistory).filter_by(user_id=user.id).all()
+
+    total = len(records)
+    high = sum(1 for r in records if r.risk_level == "High")
+    moderate = sum(1 for r in records if r.risk_level == "Moderate")
+    low = sum(1 for r in records if r.risk_level == "Low")
+
+    return {
+        "total": total,
+        "high": high,
+        "moderate": moderate,
+        "low": low
+    }
+
+# ================= CHAT =================
 @app.post("/chat")
 def chat(data: ChatRequest):
 
     if not OPENAI_API_KEY:
         return {"reply": "❌ OPENAI_API_KEY not set"}
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a helpful health assistant."},
-                {"role": "user", "content": data.message}
-            ]
-        )
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a helpful health assistant."},
+            {"role": "user", "content": data.message}
+        ]
+    )
 
-        return {"reply": response.choices[0].message.content}
-
-    except Exception as e:
-        return {"reply": f"❌ ERROR: {str(e)}"}
+    return {"reply": response.choices[0].message.content}
