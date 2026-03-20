@@ -9,9 +9,10 @@
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
 
-    <!-- Chart -->
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <!-- CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -24,8 +25,8 @@
 
         <h3>🔐 Login / Register</h3>
 
-        <input type="email" id="email" placeholder="Enter Email">
-        <input type="password" id="password" placeholder="Enter Password">
+        <input type="email" id="email" placeholder="Enter Email" required>
+        <input type="password" id="password" placeholder="Enter Password" required>
 
         <button onclick="login()">Login</button>
         <button onclick="register()">Register</button>
@@ -46,8 +47,8 @@
 
             <hr>
 
-            <!-- NAV -->
-            <button onclick="setMode('simple', event)">🟢 Simple</button>
+            <!-- NAVIGATION -->
+            <button onclick="setMode('simple', event)" class="active">🟢 Simple</button>
             <button onclick="setMode('heart', event)">❤️ Heart</button>
             <button onclick="setMode('diabetes', event)">🩸 Diabetes</button>
 
@@ -67,10 +68,10 @@
 
                 <!-- SIMPLE -->
                 <div id="simpleFields">
-                    <input type="number" id="age" placeholder="Age">
-                    <input type="number" id="glucose" placeholder="Glucose">
-                    <input type="number" id="bp" placeholder="BP">
-                    <input type="number" id="bmi" placeholder="BMI">
+                    <input type="number" id="age" placeholder="Age" required>
+                    <input type="number" id="glucose" placeholder="Glucose" required>
+                    <input type="number" id="bp" placeholder="BP" required>
+                    <input type="number" id="bmi" placeholder="BMI" required>
                 </div>
 
                 <!-- HEART -->
@@ -132,8 +133,10 @@
         </div>
     </div>
 
-    <!-- SCRIPT -->
+    <!-- ================= SCRIPTS ================= -->
     <script src="script.js"></script>
+
+    <!-- ✅ VERCEL ANALYTICS (FINAL FIX) -->
     <script defer src="/_vercel/analytics/script.js"></script>
 
 </body>
