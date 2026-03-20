@@ -6,10 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Health Scanner</title>
 
-    <!-- Google Font -->
+    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
 
-    <!-- Chart.js -->
+    <!-- Chart -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <link rel="stylesheet" href="style.css">
@@ -19,27 +19,100 @@
 
     <div class="main">
 
-        <div class="card">
+        <!-- ================= LOGIN PAGE ================= -->
+        <div id="loginPage" class="card">
             <h1>🧠 AI Health Scanner</h1>
+            <p class="subtitle">Smart AI-powered health prediction system</p>
 
-            <form id="healthForm">
-                <input type="number" id="age" placeholder="Age" required>
-                <input type="number" id="glucose" placeholder="Glucose Level" required>
-                <input type="number" id="bp" placeholder="Blood Pressure" required>
-                <input type="number" id="bmi" placeholder="BMI" required>
+            <h3>🔐 Login / Register</h3>
 
-                <button type="submit" id="predictBtn">Predict</button>
-            </form>
+            <input type="email" id="email" placeholder="Enter Email">
+            <input type="password" id="password" placeholder="Enter Password">
 
-            <div id="result"></div>
+            <button onclick="login()">Login</button>
+            <button onclick="register()">Register</button>
 
-            <!-- Graph -->
-            <canvas id="riskChart"></canvas>
+            <p id="loginStatus"></p>
         </div>
 
+        <!-- ================= DASHBOARD ================= -->
+        <div id="dashboard" class="card hidden">
+
+            <!-- 🔥 PROFILE -->
+            <div id="profileBox" style="margin-bottom:10px;"></div>
+
+            <h1>🧠 AI Health Scanner</h1>
+
+            <button id="logoutBtn" onclick="logout()">Logout</button>
+
+            <hr>
+
+            <!-- ================= TABS ================= -->
+            <div class="tabs">
+                <button onclick="setMode('simple')">🟢 Simple</button>
+                <button onclick="setMode('heart')">❤️ Heart</button>
+                <button onclick="setMode('diabetes')">🩸 Diabetes</button>
+            </div>
+
+            <!-- ================= FORM ================= -->
+            <form id="healthForm">
+
+                <div id="simpleFields">
+                    <input type="number" id="age" placeholder="Age">
+                    <input type="number" id="glucose" placeholder="Glucose">
+                    <input type="number" id="bp" placeholder="BP">
+                    <input type="number" id="bmi" placeholder="BMI">
+                </div>
+
+                <div id="heartFields" class="hidden">
+                    <input type="number" id="h_age" placeholder="Age">
+                    <input type="number" id="sex" placeholder="Sex">
+                    <input type="number" id="trestbps" placeholder="BP">
+                    <input type="number" id="chol" placeholder="Cholesterol">
+                    <input type="number" id="thalach" placeholder="Max Heart Rate">
+                    <input type="number" id="oldpeak" placeholder="Oldpeak">
+                </div>
+
+                <div id="diabetesFields" class="hidden">
+                    <input type="number" id="preg" placeholder="Pregnancies">
+                    <input type="number" id="d_glucose" placeholder="Glucose">
+                    <input type="number" id="pressure" placeholder="BP">
+                    <input type="number" id="skin" placeholder="Skin">
+                    <input type="number" id="insulin" placeholder="Insulin">
+                    <input type="number" id="d_bmi" placeholder="BMI">
+                    <input type="number" id="dpf" placeholder="DPF">
+                    <input type="number" id="d_age" placeholder="Age">
+                </div>
+
+                <button type="submit">🚀 Predict</button>
+            </form>
+
+            <!-- ================= RESULT ================= -->
+            <div id="result"></div>
+            <canvas id="riskChart"></canvas>
+
+            <!-- ================= HISTORY ================= -->
+            <h3>📜 History</h3>
+            <div id="history"></div>
+
+        </div>
     </div>
 
+    <!-- ================= CHATBOT ================= -->
+    <div class="chatbot">
+        <button class="chat-header" onclick="toggleChat()">🤖</button>
+
+        <div class="chat-body hidden" id="chatBody">
+            <div id="chatMessages"></div>
+
+            <input type="text" id="chatInput">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <!-- SCRIPT -->
     <script src="script.js"></script>
+
 </body>
 
 </html>
