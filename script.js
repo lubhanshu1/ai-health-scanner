@@ -2,7 +2,7 @@ const API_URL = "https://ai-health-backend-g329.onrender.com";
 
 let chart;
 let analyticsChart;
-let mode = "simple";
+let mode = localStorage.getItem("mode") || "simple";
 
 let chatHistory = JSON.parse(localStorage.getItem("chatHistory")) || [];
 
@@ -27,7 +27,8 @@ window.onload = () => {
         showLogin();
     }
 
-    setMode("simple");
+    setMode(mode);
+    restoreActiveButton();
     loadChatHistory();
 };
 
@@ -43,8 +44,9 @@ function showLogin() {
 }
 
 // ================= MODE =================
-function setMode(selected, event) {
+function setMode(selected, event = null) {
     mode = selected;
+    localStorage.setItem("mode", mode);
 
     ["simpleFields", "heartFields", "diabetesFields"].forEach(id =>
         document.getElementById(id).classList.add("hidden")
@@ -52,7 +54,7 @@ function setMode(selected, event) {
 
     document.getElementById(mode + "Fields").classList.remove("hidden");
 
-    // 🔥 ACTIVE BUTTON
+    // Active button
     document.querySelectorAll(".sidebar button").forEach(btn => {
         btn.classList.remove("active");
     });
@@ -60,6 +62,15 @@ function setMode(selected, event) {
     if (event) {
         event.target.classList.add("active");
     }
+}
+
+// Restore active button after reload
+function restoreActiveButton() {
+    document.querySelectorAll(".sidebar button").forEach(btn => {
+        if (btn.innerText.toLowerCase().includes(mode)) {
+            btn.classList.add("active");
+        }
+    });
 }
 
 // ================= LOGIN =================
@@ -146,10 +157,7 @@ async function loadProfile() {
 async function uploadAvatar() {
     const file = document.getElementById("avatarInput").files[0];
 
-    if (!file) {
-        alert("Please select an image 📸");
-        return;
-    }
+    if (!file) return alert("Please select an image 📸");
 
     const reader = new FileReader();
 
@@ -232,11 +240,21 @@ function showAnalyticsChart(data) {
             datasets: [{
                 label: "Risk Distribution",
                 data: [data.low, data.moderate, data.high],
-                backgroundColor: ["#00ff9f", "#ffcc00", "#ff4d6d"],
-                borderRadius: 10
+                backgroundColor: [
+                    "rgba(0,255,159,0.9)",
+                    "rgba(255,204,0,0.9)",
+                    "rgba(255,77,109,0.9)"
+                ],
+                borderColor: ["#00ff9f", "#ffcc00", "#ff4d6d"],
+                borderWidth: 2,
+                borderRadius: 12
             }]
         },
         options: {
+            animation: {
+                duration: 1200,
+                easing: "easeOutBounce"
+            },
             plugins: {
                 legend: {
                     labels: { color: "white" }
