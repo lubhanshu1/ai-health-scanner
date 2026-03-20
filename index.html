@@ -17,46 +17,55 @@
 
 <body>
 
-    <div class="main">
+    <!-- ================= LOGIN ================= -->
+    <div id="loginPage" class="card">
+        <h1>🧠 AI Health Scanner</h1>
+        <p class="subtitle">Smart AI-powered health prediction system</p>
 
-        <!-- ================= LOGIN PAGE ================= -->
-        <div id="loginPage" class="card">
-            <h1>🧠 AI Health Scanner</h1>
-            <p class="subtitle">Smart AI-powered health prediction system</p>
+        <h3>🔐 Login / Register</h3>
 
-            <h3>🔐 Login / Register</h3>
+        <input type="email" id="email" placeholder="Enter Email">
+        <input type="password" id="password" placeholder="Enter Password">
 
-            <input type="email" id="email" placeholder="Enter Email">
-            <input type="password" id="password" placeholder="Enter Password">
+        <button onclick="login()">Login</button>
+        <button onclick="register()">Register</button>
 
-            <button onclick="login()">Login</button>
-            <button onclick="register()">Register</button>
+        <p id="loginStatus"></p>
+    </div>
 
-            <p id="loginStatus"></p>
-        </div>
+    <!-- ================= DASHBOARD ================= -->
+    <div id="dashboard" class="dashboard hidden">
 
-        <!-- ================= DASHBOARD ================= -->
-        <div id="dashboard" class="card hidden">
+        <!-- 🔥 SIDEBAR -->
+        <div class="sidebar">
 
-            <!-- 🔥 PROFILE -->
-            <div id="profileBox" style="margin-bottom:10px;"></div>
+            <h2>🧠 AI Health</h2>
 
-            <h1>🧠 AI Health Scanner</h1>
-
-            <button id="logoutBtn" onclick="logout()">Logout</button>
+            <!-- PROFILE -->
+            <div id="profileBox"></div>
 
             <hr>
 
-            <!-- ================= TABS ================= -->
-            <div class="tabs">
-                <button onclick="setMode('simple')">🟢 Simple</button>
-                <button onclick="setMode('heart')">❤️ Heart</button>
-                <button onclick="setMode('diabetes')">🩸 Diabetes</button>
-            </div>
+            <!-- NAV -->
+            <button onclick="setMode('simple')">🟢 Simple</button>
+            <button onclick="setMode('heart')">❤️ Heart</button>
+            <button onclick="setMode('diabetes')">🩸 Diabetes</button>
 
-            <!-- ================= FORM ================= -->
+            <hr>
+
+            <button onclick="logout()">🚪 Logout</button>
+
+        </div>
+
+        <!-- 🔥 MAIN CONTENT -->
+        <div class="content">
+
+            <h2>Health Prediction</h2>
+
+            <!-- FORM -->
             <form id="healthForm">
 
+                <!-- SIMPLE -->
                 <div id="simpleFields">
                     <input type="number" id="age" placeholder="Age">
                     <input type="number" id="glucose" placeholder="Glucose">
@@ -64,6 +73,7 @@
                     <input type="number" id="bmi" placeholder="BMI">
                 </div>
 
+                <!-- HEART -->
                 <div id="heartFields" class="hidden">
                     <input type="number" id="h_age" placeholder="Age">
                     <input type="number" id="sex" placeholder="Sex">
@@ -73,6 +83,7 @@
                     <input type="number" id="oldpeak" placeholder="Oldpeak">
                 </div>
 
+                <!-- DIABETES -->
                 <div id="diabetesFields" class="hidden">
                     <input type="number" id="preg" placeholder="Pregnancies">
                     <input type="number" id="d_glucose" placeholder="Glucose">
@@ -87,11 +98,11 @@
                 <button type="submit">🚀 Predict</button>
             </form>
 
-            <!-- ================= RESULT ================= -->
+            <!-- RESULT -->
             <div id="result"></div>
             <canvas id="riskChart"></canvas>
 
-            <!-- ================= HISTORY ================= -->
+            <!-- HISTORY -->
             <h3>📜 History</h3>
             <div id="history"></div>
 
@@ -105,7 +116,7 @@
         <div class="chat-body hidden" id="chatBody">
             <div id="chatMessages"></div>
 
-            <input type="text" id="chatInput">
+            <input type="text" id="chatInput" placeholder="Ask something...">
             <button onclick="sendMessage()">Send</button>
         </div>
     </div>

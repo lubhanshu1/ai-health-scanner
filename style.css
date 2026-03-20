@@ -7,9 +7,10 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    color: white;
 }
 
-/* ================= MAIN CARD ================= */
+/* ================= LOGIN CARD ================= */
 .card {
     width: 370px;
     padding: 25px;
@@ -21,28 +22,75 @@ body {
     animation: fadeIn 0.6s ease;
 }
 
-/* ================= HEADINGS ================= */
-h1 {
+/* ================= DASHBOARD LAYOUT ================= */
+.dashboard {
+    display: flex;
+    width: 950px;
+    height: 600px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+}
+
+/* ================= SIDEBAR ================= */
+.sidebar {
+    width: 230px;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar h2 {
+    margin-bottom: 10px;
+}
+
+/* PROFILE */
+#profileBox {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+#profileBox img {
+    border-radius: 50%;
     margin-bottom: 5px;
+}
+
+/* ================= SIDEBAR BUTTON ================= */
+.sidebar button {
+    margin: 6px 0;
+    padding: 10px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(90deg, #6a5af9, #00c6ff);
+    color: white;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.sidebar button:hover {
+    opacity: 0.8;
+}
+
+/* ================= CONTENT ================= */
+.content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+/* ================= HEADINGS ================= */
+h1,
+h2,
+h3 {
+    margin: 5px 0;
 }
 
 .subtitle {
     font-size: 12px;
     opacity: 0.7;
     margin-bottom: 15px;
-}
-
-/* ================= TABS ================= */
-.tabs {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 10px;
-}
-
-.tabs button {
-    flex: 1;
-    font-size: 12px;
-    padding: 8px;
 }
 
 /* ================= INPUT ================= */
@@ -76,13 +124,7 @@ button {
 }
 
 button:hover {
-    transform: scale(1.05);
-    opacity: 0.9;
-}
-
-/* ================= LOGOUT ================= */
-#logoutBtn {
-    background: linear-gradient(90deg, #ff4b5c, #ff6a00);
+    transform: scale(1.03);
 }
 
 /* ================= RESULT ================= */
@@ -97,7 +139,7 @@ button:hover {
 }
 
 .history-card {
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(255, 255, 255, 0.1);
     padding: 10px;
     margin: 6px 0;
     border-radius: 10px;
@@ -177,8 +219,21 @@ button:hover {
 }
 
 /* ================= MOBILE ================= */
-@media (max-width: 400px) {
-    .card {
-        width: 90%;
+@media (max-width: 768px) {
+    .dashboard {
+        flex-direction: column;
+        width: 95%;
+        height: auto;
+    }
+
+    .sidebar {
+        width: 100%;
+        flex-direction: row;
+        overflow-x: auto;
+    }
+
+    .sidebar button {
+        flex: 1;
+        font-size: 12px;
     }
 }

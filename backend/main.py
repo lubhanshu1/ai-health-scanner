@@ -53,8 +53,8 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     password = Column(String)
 
-    # 🔥 NEW
-    avatar = Column(String, default="https://i.pravatar.cc/100")
+    # 🔥 Avatar support
+    avatar = Column(String, default="https://i.pravatar.cc/150")
 
     history = relationship("HealthHistory", back_populates="user")
 
@@ -100,7 +100,6 @@ def create_token(data: dict):
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security),
                      db: Session = Depends(get_db)):
-
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
@@ -122,6 +121,9 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+class AvatarUpdate(BaseModel):
+    avatar: str
 
 class SimpleInput(BaseModel):
     age: float
@@ -153,7 +155,6 @@ class ChatRequest(BaseModel):
 # ================= AUTH ROUTES =================
 @app.post("/register")
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
-
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
 
@@ -164,7 +165,6 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
 @app.post("/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not verify_password(data.password, user.password):
@@ -181,6 +181,16 @@ def profile(user: User = Depends(get_current_user)):
         "email": user.email,
         "avatar": user.avatar
     }
+
+@app.post("/upload-avatar")
+def upload_avatar(data: AvatarUpdate,
+                  user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+
+    user.avatar = data.avatar
+    db.commit()
+
+    return {"message": "Avatar updated"}
 
 # ================= LOAD ML =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -211,6 +221,9 @@ def heart_risk(data: HeartRiskInput,
                user: User = Depends(get_current_user),
                db: Session = Depends(get_db)):
 
+    if heart_model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
+
     prob = float(heart_model.predict_proba([[data.age, data.sex, data.trestbps,
                                             data.chol, data.thalach, data.oldpeak]])[0][1])
 
@@ -227,6 +240,9 @@ def heart_risk(data: HeartRiskInput,
 def diabetes_risk(data: DiabetesRiskInput,
                   user: User = Depends(get_current_user),
                   db: Session = Depends(get_db)):
+
+    if diabetes_model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
 
     prob = float(diabetes_model.predict_proba([[data.Pregnancies, data.Glucose, data.BloodPressure,
                                                data.SkinThickness, data.Insulin, data.BMI,
