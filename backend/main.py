@@ -30,7 +30,7 @@ app = FastAPI(title="AI Health Scanner 🚀")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # later restrict for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -150,7 +150,6 @@ class ChatRequest(BaseModel):
 # ================= AUTH =================
 @app.post("/register")
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
-
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
 
@@ -161,7 +160,6 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
 @app.post("/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not verify_password(data.password, user.password):
@@ -188,10 +186,15 @@ def upload_avatar(data: AvatarUpdate,
 # ================= LOAD MODELS =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-diabetes_model = joblib.load(os.path.join(BASE_DIR, "diabetes_model.pkl"))
-heart_model = joblib.load(os.path.join(BASE_DIR, "heart_model.pkl"))
+try:
+    diabetes_model = joblib.load(os.path.join(BASE_DIR, "diabetes_model.pkl"))
+    heart_model = joblib.load(os.path.join(BASE_DIR, "heart_model.pkl"))
+    print("✅ Models loaded")
+except Exception as e:
+    print("❌ MODEL ERROR:", e)
+    diabetes_model = heart_model = None
 
-# ================= SAVE FUNCTION =================
+# ================= SAVE =================
 def save_history(db, user, type_, level, prob):
     db.add(HealthHistory(
         user_id=user.id,
@@ -207,6 +210,9 @@ def predict_simple(data: SimpleInput,
                    user: User = Depends(get_current_user),
                    db: Session = Depends(get_db)):
 
+    if diabetes_model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
+
     prob = float(diabetes_model.predict_proba([[0, data.glucose, data.bp, 0, 0, data.bmi, 0.5, data.age]])[0][1])
     level = "Low" if prob < 0.4 else "Moderate" if prob < 0.7 else "High"
 
@@ -214,11 +220,13 @@ def predict_simple(data: SimpleInput,
 
     return {"risk_level": level, "risk_score": prob}
 
-
 @app.post("/heart-risk")
 def heart_risk(data: HeartRiskInput,
                user: User = Depends(get_current_user),
                db: Session = Depends(get_db)):
+
+    if heart_model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
 
     prob = float(heart_model.predict_proba([[data.age, data.sex, data.trestbps,
                                             data.chol, data.thalach, data.oldpeak]])[0][1])
@@ -229,11 +237,13 @@ def heart_risk(data: HeartRiskInput,
 
     return {"risk_level": level, "risk_score": prob}
 
-
 @app.post("/diabetes-risk")
 def diabetes_risk(data: DiabetesRiskInput,
                   user: User = Depends(get_current_user),
                   db: Session = Depends(get_db)):
+
+    if diabetes_model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
 
     prob = float(diabetes_model.predict_proba([[data.Pregnancies, data.Glucose, data.BloodPressure,
                                                data.SkinThickness, data.Insulin, data.BMI,
@@ -262,23 +272,18 @@ def history(user: User = Depends(get_current_user),
         "time": str(r.created_at)
     } for r in records]
 
-# ================= ANALYTICS (NEW 🔥) =================
+# ================= ANALYTICS =================
 @app.get("/analytics")
 def analytics(user: User = Depends(get_current_user),
               db: Session = Depends(get_db)):
 
     records = db.query(HealthHistory).filter_by(user_id=user.id).all()
 
-    total = len(records)
-    high = sum(1 for r in records if r.risk_level == "High")
-    moderate = sum(1 for r in records if r.risk_level == "Moderate")
-    low = sum(1 for r in records if r.risk_level == "Low")
-
     return {
-        "total": total,
-        "high": high,
-        "moderate": moderate,
-        "low": low
+        "total": len(records),
+        "high": sum(1 for r in records if r.risk_level == "High"),
+        "moderate": sum(1 for r in records if r.risk_level == "Moderate"),
+        "low": sum(1 for r in records if r.risk_level == "Low")
     }
 
 # ================= CHAT =================
@@ -288,12 +293,16 @@ def chat(data: ChatRequest):
     if not OPENAI_API_KEY:
         return {"reply": "❌ OPENAI_API_KEY not set"}
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a helpful health assistant."},
-            {"role": "user", "content": data.message}
-        ]
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful health assistant."},
+                {"role": "user", "content": data.message}
+            ]
+        )
 
-    return {"reply": response.choices[0].message.content}
+        return {"reply": response.choices[0].message.content}
+
+    except Exception as e:
+        return {"reply": f"❌ ERROR: {str(e)}"}
