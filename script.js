@@ -12,8 +12,8 @@ window.onload = () => {
 
     if (token) {
         showDashboard();
-        loadProfile();   // 🔥 NEW
-        loadHistory();   // 🔥 backend history
+        loadProfile();
+        loadHistory();
     } else {
         showLogin();
     }
@@ -46,8 +46,8 @@ function setMode(selected) {
 
 // ================= LOGIN =================
 async function login() {
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
+    const email = emailInput.value;
+    const password = passwordInput.value;
 
     try {
         const res = await fetch(`${API_URL}/login`, {
@@ -60,6 +60,7 @@ async function login() {
 
         if (res.ok) {
             localStorage.setItem("token", data.access_token);
+
             alert("Welcome 🚀");
 
             showDashboard();
@@ -67,17 +68,17 @@ async function login() {
             loadHistory();
 
         } else {
-            document.getElementById("loginStatus").innerText = data.detail;
+            loginStatus.innerText = data.detail;
         }
     } catch {
-        document.getElementById("loginStatus").innerText = "❌ Server error";
+        loginStatus.innerText = "❌ Server error";
     }
 }
 
 // ================= REGISTER =================
 async function register() {
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
+    const email = emailInput.value;
+    const password = passwordInput.value;
 
     try {
         const res = await fetch(`${API_URL}/register`, {
@@ -104,39 +105,52 @@ async function loadProfile() {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    const res = await fetch(`${API_URL}/profile`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    try {
+        const res = await fetch(`${API_URL}/profile`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
 
-    const user = await res.json();
+        const user = await res.json();
 
-    document.getElementById("profileBox").innerHTML = `
-        <img src="${user.avatar}" width="50" style="border-radius:50%">
-        <p>${user.email}</p>
-    `;
+        const box = document.getElementById("profileBox");
+        if (!box) return;
+
+        box.innerHTML = `
+            <img src="${user.avatar}" width="50" style="border-radius:50%">
+            <p>${user.email}</p>
+        `;
+    } catch {
+        console.log("Profile load error");
+    }
 }
 
-// ================= HISTORY (BACKEND) =================
+// ================= HISTORY =================
 async function loadHistory() {
     const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const res = await fetch(`${API_URL}/history`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
-
-    const history = await res.json();
     const historyDiv = document.getElementById("history");
 
-    historyDiv.innerHTML = "";
+    if (!token || !historyDiv) return;
 
-    history.slice(0, 5).forEach(item => {
-        historyDiv.innerHTML += `
-            <div class="history-card">
-                <b>${item.type}</b> - ${item.risk} (${item.score}%)
-            </div>
-        `;
-    });
+    try {
+        const res = await fetch(`${API_URL}/history`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+
+        historyDiv.innerHTML = "";
+
+        data.reverse().slice(0, 5).forEach(item => {
+            historyDiv.innerHTML += `
+                <div class="history-card">
+                    <b>${item.type}</b> - ${item.risk} (${(item.score * 100).toFixed(1)}%)
+                </div>
+            `;
+        });
+
+    } catch {
+        historyDiv.innerHTML = "❌ Failed to load history";
+    }
 }
 
 // ================= SOUND =================
@@ -154,41 +168,46 @@ document.addEventListener("DOMContentLoaded", () => {
         let body = {};
         const token = localStorage.getItem("token");
 
+        // ===== SIMPLE =====
         if (mode === "simple") {
             url = "/predict-simple";
             body = {
-                age: +document.getElementById("age").value,
-                glucose: +document.getElementById("glucose").value,
-                bp: +document.getElementById("bp").value,
-                bmi: +document.getElementById("bmi").value
+                age: +age.value,
+                glucose: +glucose.value,
+                bp: +bp.value,
+                bmi: +bmi.value
             };
         }
+
+        // ===== HEART =====
         else if (mode === "heart") {
             if (!token) return alert("Login required");
 
             url = "/heart-risk";
             body = {
-                age: +document.getElementById("h_age").value,
-                sex: +document.getElementById("sex").value,
-                trestbps: +document.getElementById("trestbps").value,
-                chol: +document.getElementById("chol").value,
-                thalach: +document.getElementById("thalach").value,
-                oldpeak: +document.getElementById("oldpeak").value
+                age: +h_age.value,
+                sex: +sex.value,
+                trestbps: +trestbps.value,
+                chol: +chol.value,
+                thalach: +thalach.value,
+                oldpeak: +oldpeak.value
             };
         }
+
+        // ===== DIABETES =====
         else {
             if (!token) return alert("Login required");
 
             url = "/diabetes-risk";
             body = {
-                Pregnancies: +document.getElementById("preg").value,
-                Glucose: +document.getElementById("d_glucose").value,
-                BloodPressure: +document.getElementById("pressure").value,
-                SkinThickness: +document.getElementById("skin").value,
-                Insulin: +document.getElementById("insulin").value,
-                BMI: +document.getElementById("d_bmi").value,
-                DiabetesPedigreeFunction: +document.getElementById("dpf").value,
-                Age: +document.getElementById("d_age").value
+                Pregnancies: +preg.value,
+                Glucose: +d_glucose.value,
+                BloodPressure: +pressure.value,
+                SkinThickness: +skin.value,
+                Insulin: +insulin.value,
+                BMI: +d_bmi.value,
+                DiabetesPedigreeFunction: +dpf.value,
+                Age: +d_age.value
             };
         }
 
@@ -207,6 +226,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const data = await res.json();
 
+            if (!res.ok) {
+                result.innerText = data.detail || "Error";
+                return;
+            }
+
             const score = data.risk_score;
 
             result.innerHTML = `
@@ -216,9 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             showChart(score);
             playSound();
-
-            // 🔥 REFRESH HISTORY FROM DB
-            loadHistory();
+            loadHistory(); // 🔥 refresh backend history
 
         } catch {
             result.innerText = "❌ Server not responding";
@@ -257,8 +279,6 @@ async function sendMessage() {
 
     box.innerHTML += `<p>🧑 ${msg}</p>`;
     input.value = "";
-
-    chatHistory.push({ role: "user", content: msg });
 
     try {
         const res = await fetch(`${API_URL}/chat`, {
