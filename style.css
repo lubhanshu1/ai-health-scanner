@@ -2,7 +2,7 @@
 body {
     margin: 0;
     font-family: 'Poppins', sans-serif;
-    background: linear-gradient(135deg, #1e1e2f, #2a2a4a);
+    background: radial-gradient(circle at top, #1e293b, #020617);
     height: 100vh;
     display: flex;
     justify-content: center;
@@ -16,30 +16,32 @@ body {
     padding: 25px;
     border-radius: 20px;
     background: rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(20px);
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(25px);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
     text-align: center;
     animation: fadeIn 0.6s ease;
 }
 
-/* ================= DASHBOARD LAYOUT ================= */
+/* ================= DASHBOARD ================= */
 .dashboard {
     display: flex;
-    width: 950px;
-    height: 600px;
-    border-radius: 20px;
+    width: 1000px;
+    height: 620px;
+    border-radius: 25px;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(25px);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.7);
 }
 
 /* ================= SIDEBAR ================= */
 .sidebar {
-    width: 230px;
-    background: rgba(0, 0, 0, 0.4);
+    width: 240px;
+    background: rgba(0, 0, 0, 0.5);
     padding: 20px;
     display: flex;
     flex-direction: column;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .sidebar h2 {
@@ -54,59 +56,8 @@ body {
 
 #profileBox img {
     border-radius: 50%;
-    margin-bottom: 5px;
-}
-
-/* ================= SIDEBAR BUTTON ================= */
-.sidebar button {
-    margin: 6px 0;
-    padding: 10px;
-    border-radius: 10px;
-    border: none;
-    background: linear-gradient(90deg, #6a5af9, #00c6ff);
-    color: white;
-    cursor: pointer;
-    font-size: 13px;
-}
-
-.sidebar button:hover {
-    opacity: 0.8;
-}
-
-/* ================= CONTENT ================= */
-.content {
-    flex: 1;
-    padding: 20px;
-    overflow-y: auto;
-}
-
-/* ================= HEADINGS ================= */
-h1,
-h2,
-h3 {
-    margin: 5px 0;
-}
-
-.subtitle {
-    font-size: 12px;
-    opacity: 0.7;
-    margin-bottom: 15px;
-}
-
-/* ================= INPUT ================= */
-input {
-    width: 100%;
-    padding: 12px;
-    margin: 8px 0;
-    border-radius: 10px;
-    border: none;
-    outline: none;
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-}
-
-input::placeholder {
-    color: #ccc;
+    margin-bottom: 8px;
+    border: 2px solid #00c6ff;
 }
 
 /* ================= BUTTON ================= */
@@ -114,17 +65,59 @@ button {
     width: 100%;
     padding: 12px;
     margin: 8px 0;
-    border-radius: 10px;
+    border-radius: 12px;
     border: none;
-    background: linear-gradient(90deg, #6a5af9, #00c6ff);
+    background: linear-gradient(135deg, #6366f1, #06b6d4);
     color: white;
     font-weight: bold;
     cursor: pointer;
-    transition: 0.3s;
+    transition: all 0.3s ease;
 }
 
 button:hover {
-    transform: scale(1.03);
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+}
+
+/* ================= SIDEBAR BUTTON ================= */
+.sidebar button {
+    font-size: 13px;
+}
+
+/* ================= CONTENT ================= */
+.content {
+    flex: 1;
+    padding: 25px;
+    overflow-y: auto;
+}
+
+/* ================= HEADINGS ================= */
+h1,
+h2,
+h3 {
+    margin: 8px 0;
+    letter-spacing: 1px;
+}
+
+/* ================= INPUT ================= */
+input {
+    width: 100%;
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 12px;
+    border: none;
+    outline: none;
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    transition: 0.3s;
+}
+
+input:focus {
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+input::placeholder {
+    color: #ccc;
 }
 
 /* ================= RESULT ================= */
@@ -139,11 +132,16 @@ button:hover {
 }
 
 .history-card {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 10px;
-    margin: 6px 0;
-    border-radius: 10px;
-    font-size: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 12px;
+    font-size: 13px;
+    transition: 0.3s;
+}
+
+.history-card:hover {
+    background: rgba(255, 255, 255, 0.15);
 }
 
 /* ================= LOADER ================= */
@@ -165,21 +163,22 @@ button:hover {
 }
 
 .chat-header {
-    background: linear-gradient(90deg, #6a5af9, #00c6ff);
+    background: linear-gradient(135deg, #6366f1, #06b6d4);
     border-radius: 50%;
     padding: 15px;
     color: white;
     border: none;
     cursor: pointer;
     font-size: 18px;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
 }
 
 .chat-body {
     width: 260px;
     background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(15px);
     padding: 10px;
-    border-radius: 10px;
+    border-radius: 12px;
     margin-top: 10px;
     color: white;
     max-height: 300px;
