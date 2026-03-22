@@ -1,118 +1,52 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
-
 body {
     margin: 0;
-    font-family: 'Poppins', sans-serif;
-    background: linear-gradient(135deg, #0f172a, #1e293b);
+    font-family: Arial;
+    background: #0f172a;
     color: white;
 }
 
-/* ================= GENERAL ================= */
+.center {
+    text-align: center;
+    margin-top: 100px;
+}
+
+input {
+    padding: 10px;
+    margin: 5px;
+    border-radius: 6px;
+    border: none;
+}
+
+button {
+    padding: 10px 15px;
+    margin: 5px;
+    border: none;
+    border-radius: 6px;
+    background: #2563eb;
+    color: white;
+    cursor: pointer;
+}
+
 .hidden {
     display: none;
 }
 
-input,
-button {
-    padding: 10px;
-    margin: 6px;
-    border-radius: 8px;
-    border: none;
-    outline: none;
-    font-size: 14px;
-}
-
-button {
-    background: linear-gradient(45deg, #6366f1, #22c55e);
-    color: white;
-    cursor: pointer;
-    transition: 0.3s;
-}
-
-button:hover {
-    transform: scale(1.05);
-}
-
-/* ================= LOGIN ================= */
-.center {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-top: 120px;
-}
-
-.center h1 {
-    font-size: 28px;
-    margin-bottom: 20px;
-}
-
-/* ================= SIDEBAR ================= */
 .sidebar {
-    width: 220px;
-    height: 100vh;
-    background: rgba(30, 41, 59, 0.9);
     position: fixed;
+    width: 200px;
+    height: 100%;
+    background: #020617;
     padding: 20px;
-    backdrop-filter: blur(10px);
 }
 
-.sidebar h2 {
-    margin-bottom: 20px;
-}
-
-.sidebar button {
-    width: 100%;
-    margin-bottom: 10px;
-}
-
-/* ================= MAIN ================= */
 .main {
-    margin-left: 240px;
+    margin-left: 220px;
     padding: 20px;
 }
 
-/* ================= CARDS ================= */
-.card {
-    background: rgba(30, 41, 59, 0.8);
-    padding: 15px;
-    margin-bottom: 15px;
-    border-radius: 12px;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-}
-
-/* ================= HISTORY ================= */
 .history-card {
-    background: rgba(255, 255, 255, 0.05);
+    background: #1e293b;
     padding: 10px;
-    margin: 5px 0;
-    border-radius: 8px;
-}
-
-/* ================= CHAT ================= */
-.chat {
-    position: fixed;
-    bottom: 15px;
-    right: 15px;
-    width: 300px;
-    background: rgba(30, 41, 59, 0.9);
-    padding: 10px;
-    border-radius: 12px;
-    backdrop-filter: blur(10px);
-}
-
-#chatMessages {
-    height: 160px;
-    overflow-y: auto;
-    margin-bottom: 10px;
-    font-size: 14px;
-}
-
-#chatMessages p {
-    margin: 5px 0;
-}
-
-/* ================= CHART ================= */
-canvas {
-    max-width: 100%;
+    margin: 5px;
+    border-radius: 6px;
 }

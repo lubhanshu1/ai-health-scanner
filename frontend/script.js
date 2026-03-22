@@ -1,22 +1,9 @@
 const API_URL = "https://ai-health-backend-g329.onrender.com";
 
+let mode = "simple";
 let chart;
 let analyticsChart;
-let mode = localStorage.getItem("mode") || "simple";
-let chatHistory = JSON.parse(localStorage.getItem("chatHistory")) || [];
 
-// ================= SAFE GET =================
-const $ = (id) => document.getElementById(id);
-
-// ================= ELEMENTS =================
-const loginPage = $("loginPage");
-const dashboard = $("dashboard");
-const profileBox = $("profileBox");
-const historyDiv = $("history");
-const resultDiv = $("result");
-const loginStatus = $("loginStatus");
-
-// ================= AUTO LOAD =================
 window.onload = () => {
     const token = localStorage.getItem("token");
 
@@ -28,216 +15,116 @@ window.onload = () => {
     } else {
         showLogin();
     }
-
-    setMode(mode);
-    restoreActiveButton();
-    loadChatHistory();
 };
 
-// ================= PAGE =================
+// ================= UI =================
 function showDashboard() {
-    loginPage?.classList.add("hidden");
-    dashboard?.classList.remove("hidden");
+    loginPage.classList.add("hidden");
+    dashboard.classList.remove("hidden");
 }
 
 function showLogin() {
-    loginPage?.classList.remove("hidden");
-    dashboard?.classList.add("hidden");
+    loginPage.classList.remove("hidden");
+    dashboard.classList.add("hidden");
 }
 
 // ================= MODE =================
-function setMode(selected, event = null) {
+function setMode(selected) {
     mode = selected;
-    localStorage.setItem("mode", mode);
 
-    ["simpleFields", "heartFields", "diabetesFields"].forEach(id =>
-        $(id)?.classList.add("hidden")
-    );
+    ["simpleFields", "heartFields", "diabetesFields"]
+        .forEach(id => document.getElementById(id).classList.add("hidden"));
 
-    $(mode + "Fields")?.classList.remove("hidden");
-
-    document.querySelectorAll(".sidebar button").forEach(btn =>
-        btn.classList.remove("active")
-    );
-
-    if (event) event.target.classList.add("active");
-}
-
-function restoreActiveButton() {
-    document.querySelectorAll(".sidebar button").forEach(btn => {
-        if (btn.innerText.toLowerCase().includes(mode)) {
-            btn.classList.add("active");
-        }
-    });
+    document.getElementById(mode + "Fields").classList.remove("hidden");
 }
 
 // ================= LOGIN =================
 async function login() {
-    const emailVal = $("email")?.value;
-    const passwordVal = $("password")?.value;
+    const res = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            email: email.value,
+            password: password.value
+        })
+    });
 
-    loginStatus.innerText = "⏳ Logging in...";
+    const data = await res.json();
 
-    try {
-        const res = await fetch(`${API_URL}/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: emailVal, password: passwordVal })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            localStorage.setItem("token", data.access_token);
-            showDashboard();
-            loadProfile();
-            loadHistory();
-            loadAnalytics();
-        } else {
-            loginStatus.innerText = data.detail || "Login failed";
-        }
-
-    } catch {
-        loginStatus.innerText = "❌ Server error";
+    if (res.ok) {
+        localStorage.setItem("token", data.access_token);
+        location.reload();
+    } else {
+        alert(data.detail);
     }
 }
 
 // ================= REGISTER =================
 async function register() {
-    const emailVal = $("email")?.value;
-    const passwordVal = $("password")?.value;
+    await fetch(`${API_URL}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            email: email.value,
+            password: password.value
+        })
+    });
 
-    try {
-        const res = await fetch(`${API_URL}/register`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: emailVal, password: passwordVal })
-        });
-
-        const data = await res.json();
-        alert(data.message || data.detail);
-
-    } catch {
-        alert("❌ Server error");
-    }
+    alert("Registered!");
 }
 
 // ================= LOGOUT =================
 function logout() {
-    localStorage.clear();
+    localStorage.removeItem("token");
     location.reload();
 }
 
 // ================= PROFILE =================
 async function loadProfile() {
-    const token = localStorage.getItem("token");
-
     try {
         const res = await fetch(`${API_URL}/profile`, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
         });
 
         if (!res.ok) throw new Error();
 
         const user = await res.json();
 
-        if (!user || !user.email) {
-            profileBox.innerHTML = "⚠️ Profile error";
-            return;
-        }
-
         profileBox.innerHTML = `
-            <img src="${user.avatar}" width="70" style="border-radius:50%">
-            <p>${user.email}</p>
-            <input type="file" id="avatarInput">
-            <button onclick="uploadAvatar()">Upload Avatar</button>
+            <img src="${user.avatar}" width="60"><br>
+            ${user.email}
         `;
-
     } catch {
-        profileBox.innerHTML = "❌ Failed to load profile";
+        profileBox.innerHTML = "❌ Profile error";
     }
-}
-
-// ================= AVATAR =================
-async function uploadAvatar() {
-    const file = $("avatarInput")?.files[0];
-    if (!file) return alert("Select image 📸");
-
-    const reader = new FileReader();
-
-    reader.onload = async () => {
-        const token = localStorage.getItem("token");
-
-        await fetch(`${API_URL}/upload-avatar`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({ avatar: reader.result })
-        });
-
-        loadProfile();
-    };
-
-    reader.readAsDataURL(file);
 }
 
 // ================= HISTORY =================
 async function loadHistory() {
-    const token = localStorage.getItem("token");
+    const res = await fetch(`${API_URL}/history`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+    });
 
-    try {
-        const res = await fetch(`${API_URL}/history`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+    const data = await res.json();
+    history.innerHTML = "";
 
-        const data = await res.json();
-
-        if (!historyDiv) return;
-
-        historyDiv.innerHTML = "";
-
-        if (!data.length) {
-            historyDiv.innerHTML = "No records 📭";
-            return;
-        }
-
-        data.slice(0, 5).forEach(item => {
-            historyDiv.innerHTML += `
-                <div class="history-card">
-                    <b>${item.type}</b> - ${item.risk} (${item.score}%)
-                </div>
-            `;
-        });
-
-    } catch {
-        if (historyDiv) historyDiv.innerHTML = "❌ History error";
-    }
+    data.forEach(i => {
+        history.innerHTML += `
+        <div class="history-card">
+            ${i.type} - ${i.risk} (${i.score}%)
+        </div>`;
+    });
 }
 
 // ================= ANALYTICS =================
 async function loadAnalytics() {
-    const token = localStorage.getItem("token");
+    const res = await fetch(`${API_URL}/analytics`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+    });
 
-    try {
-        const res = await fetch(`${API_URL}/analytics`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+    const data = await res.json();
 
-        const data = await res.json();
-        showAnalyticsChart(data);
-
-    } catch {
-        console.log("Analytics error");
-    }
-}
-
-function showAnalyticsChart(data) {
-    const canvas = $("analyticsChart");
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
+    const ctx = document.getElementById("analyticsChart");
 
     if (analyticsChart) analyticsChart.destroy();
 
@@ -253,64 +140,38 @@ function showAnalyticsChart(data) {
 }
 
 // ================= PREDICT =================
-document.addEventListener("DOMContentLoaded", () => {
-    const form = $("healthForm");
-    if (!form) return;
+document.getElementById("healthForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
 
-    form.addEventListener("submit", async (e) => {
-        e.preventDefault();
+    let url = "", body = {};
 
-        const token = localStorage.getItem("token");
+    if (mode === "simple") {
+        url = "/predict-simple";
+        body = { age: +age.value, glucose: +glucose.value, bp: +bp.value, bmi: +bmi.value };
+    }
+    else if (mode === "heart") {
+        url = "/heart-risk";
+        body = { age: +h_age.value, sex: +sex.value, trestbps: +trestbps.value, chol: +chol.value, thalach: +thalach.value, oldpeak: +oldpeak.value };
+    }
+    else {
+        url = "/diabetes-risk";
+        body = { Pregnancies: +preg.value, Glucose: +d_glucose.value, BloodPressure: +pressure.value, SkinThickness: +skin.value, Insulin: +insulin.value, BMI: +d_bmi.value, DiabetesPedigreeFunction: +dpf.value, Age: +d_age.value };
+    }
 
-        let url = "";
-        let body = {};
-
-        if (mode === "simple") {
-            url = "/predict-simple";
-            body = { age: +age.value, glucose: +glucose.value, bp: +bp.value, bmi: +bmi.value };
-        } else if (mode === "heart") {
-            url = "/heart-risk";
-            body = { age: +h_age.value, sex: +sex.value, trestbps: +trestbps.value, chol: +chol.value, thalach: +thalach.value, oldpeak: +oldpeak.value };
-        } else {
-            url = "/diabetes-risk";
-            body = { Pregnancies: +preg.value, Glucose: +d_glucose.value, BloodPressure: +pressure.value, SkinThickness: +skin.value, Insulin: +insulin.value, BMI: +d_bmi.value, DiabetesPedigreeFunction: +dpf.value, Age: +d_age.value };
-        }
-
-        resultDiv.innerHTML = "⏳ Predicting...";
-
-        try {
-            const res = await fetch(API_URL + url, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify(body)
-            });
-
-            const data = await res.json();
-
-            resultDiv.innerHTML = `
-                Risk: ${data.risk_level}<br>
-                Score: ${(data.risk_score * 100).toFixed(1)}%
-            `;
-
-            showChart(data.risk_score);
-            loadHistory();
-            loadAnalytics();
-
-        } catch {
-            resultDiv.innerText = "❌ Server error";
-        }
+    const res = await fetch(API_URL + url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify(body)
     });
-});
 
-// ================= CHART =================
-function showChart(score) {
-    const canvas = $("riskChart");
-    if (!canvas) return;
+    const data = await res.json();
 
-    const ctx = canvas.getContext("2d");
+    result.innerHTML = `${data.risk_level} (${(data.risk_score * 100).toFixed(1)}%)`;
+
+    const ctx = document.getElementById("riskChart");
 
     if (chart) chart.destroy();
 
@@ -318,50 +179,10 @@ function showChart(score) {
         type: "doughnut",
         data: {
             labels: ["Risk", "Safe"],
-            datasets: [{ data: [score, 1 - score] }]
+            datasets: [{ data: [data.risk_score, 1 - data.risk_score] }]
         }
     });
-}
 
-// ================= CHAT =================
-async function sendMessage() {
-    const input = $("chatInput");
-    const msg = input.value.trim();
-    if (!msg) return;
-
-    const box = $("chatMessages");
-
-    box.innerHTML += `<p>🧑 ${msg}</p>`;
-    input.value = "";
-
-    try {
-        const res = await fetch(`${API_URL}/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: msg })
-        });
-
-        const data = await res.json();
-
-        box.innerHTML += `<p>🤖 ${data.reply}</p>`;
-
-        chatHistory.push({ role: "user", content: msg });
-        chatHistory.push({ role: "bot", content: data.reply });
-        localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
-
-        box.scrollTop = box.scrollHeight;
-
-    } catch {
-        box.innerHTML += `<p>❌ Error</p>`;
-    }
-}
-
-// ================= LOAD CHAT =================
-function loadChatHistory() {
-    const box = $("chatMessages");
-    if (!box) return;
-
-    chatHistory.forEach(msg => {
-        box.innerHTML += `<p>${msg.role === "user" ? "🧑" : "🤖"} ${msg.content}</p>`;
-    });
-}
+    loadHistory();
+    loadAnalytics();
+});
