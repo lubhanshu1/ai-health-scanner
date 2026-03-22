@@ -5,18 +5,16 @@ let analyticsChart;
 let mode = localStorage.getItem("mode") || "simple";
 let chatHistory = JSON.parse(localStorage.getItem("chatHistory")) || [];
 
-// ================= SAFE ELEMENT GET =================
-function getEl(id) {
-    return document.getElementById(id);
-}
+// ================= SAFE GET =================
+const $ = (id) => document.getElementById(id);
 
 // ================= ELEMENTS =================
-const loginPage = getEl("loginPage");
-const dashboard = getEl("dashboard");
-const profileBox = getEl("profileBox");
-const historyDiv = getEl("history");
-const resultDiv = getEl("result");
-const loginStatus = getEl("loginStatus");
+const loginPage = $("loginPage");
+const dashboard = $("dashboard");
+const profileBox = $("profileBox");
+const historyDiv = $("history");
+const resultDiv = $("result");
+const loginStatus = $("loginStatus");
 
 // ================= AUTO LOAD =================
 window.onload = () => {
@@ -52,15 +50,15 @@ function setMode(selected, event = null) {
     mode = selected;
     localStorage.setItem("mode", mode);
 
-    ["simpleFields", "heartFields", "diabetesFields"].forEach(id => {
-        getEl(id)?.classList.add("hidden");
-    });
+    ["simpleFields", "heartFields", "diabetesFields"].forEach(id =>
+        $(id)?.classList.add("hidden")
+    );
 
-    getEl(mode + "Fields")?.classList.remove("hidden");
+    $(mode + "Fields")?.classList.remove("hidden");
 
-    document.querySelectorAll(".sidebar button").forEach(btn => {
-        btn.classList.remove("active");
-    });
+    document.querySelectorAll(".sidebar button").forEach(btn =>
+        btn.classList.remove("active")
+    );
 
     if (event) event.target.classList.add("active");
 }
@@ -75,8 +73,8 @@ function restoreActiveButton() {
 
 // ================= LOGIN =================
 async function login() {
-    const emailVal = getEl("email").value;
-    const passwordVal = getEl("password").value;
+    const emailVal = $("email")?.value;
+    const passwordVal = $("password")?.value;
 
     loginStatus.innerText = "⏳ Logging in...";
 
@@ -99,16 +97,15 @@ async function login() {
             loginStatus.innerText = data.detail || "Login failed";
         }
 
-    } catch (err) {
-        console.error(err);
+    } catch {
         loginStatus.innerText = "❌ Server error";
     }
 }
 
 // ================= REGISTER =================
 async function register() {
-    const emailVal = getEl("email").value;
-    const passwordVal = getEl("password").value;
+    const emailVal = $("email")?.value;
+    const passwordVal = $("password")?.value;
 
     try {
         const res = await fetch(`${API_URL}/register`, {
@@ -140,12 +137,12 @@ async function loadProfile() {
             headers: { Authorization: `Bearer ${token}` }
         });
 
-        if (!res.ok) throw new Error("Profile fetch failed");
+        if (!res.ok) throw new Error();
 
         const user = await res.json();
 
         if (!user || !user.email) {
-            profileBox.innerHTML = "⚠️ Failed to load profile";
+            profileBox.innerHTML = "⚠️ Profile error";
             return;
         }
 
@@ -156,15 +153,14 @@ async function loadProfile() {
             <button onclick="uploadAvatar()">Upload Avatar</button>
         `;
 
-    } catch (err) {
-        console.error(err);
-        profileBox.innerHTML = "❌ Profile error";
+    } catch {
+        profileBox.innerHTML = "❌ Failed to load profile";
     }
 }
 
 // ================= AVATAR =================
 async function uploadAvatar() {
-    const file = getEl("avatarInput")?.files[0];
+    const file = $("avatarInput")?.files[0];
     if (!file) return alert("Select image 📸");
 
     const reader = new FileReader();
@@ -197,6 +193,9 @@ async function loadHistory() {
         });
 
         const data = await res.json();
+
+        if (!historyDiv) return;
+
         historyDiv.innerHTML = "";
 
         if (!data.length) {
@@ -213,17 +212,124 @@ async function loadHistory() {
         });
 
     } catch {
-        historyDiv.innerHTML = "❌ History error";
+        if (historyDiv) historyDiv.innerHTML = "❌ History error";
     }
+}
+
+// ================= ANALYTICS =================
+async function loadAnalytics() {
+    const token = localStorage.getItem("token");
+
+    try {
+        const res = await fetch(`${API_URL}/analytics`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+        showAnalyticsChart(data);
+
+    } catch {
+        console.log("Analytics error");
+    }
+}
+
+function showAnalyticsChart(data) {
+    const canvas = $("analyticsChart");
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+
+    if (analyticsChart) analyticsChart.destroy();
+
+    analyticsChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: ["Low", "Moderate", "High"],
+            datasets: [{
+                data: [data.low, data.moderate, data.high]
+            }]
+        }
+    });
+}
+
+// ================= PREDICT =================
+document.addEventListener("DOMContentLoaded", () => {
+    const form = $("healthForm");
+    if (!form) return;
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const token = localStorage.getItem("token");
+
+        let url = "";
+        let body = {};
+
+        if (mode === "simple") {
+            url = "/predict-simple";
+            body = { age: +age.value, glucose: +glucose.value, bp: +bp.value, bmi: +bmi.value };
+        } else if (mode === "heart") {
+            url = "/heart-risk";
+            body = { age: +h_age.value, sex: +sex.value, trestbps: +trestbps.value, chol: +chol.value, thalach: +thalach.value, oldpeak: +oldpeak.value };
+        } else {
+            url = "/diabetes-risk";
+            body = { Pregnancies: +preg.value, Glucose: +d_glucose.value, BloodPressure: +pressure.value, SkinThickness: +skin.value, Insulin: +insulin.value, BMI: +d_bmi.value, DiabetesPedigreeFunction: +dpf.value, Age: +d_age.value };
+        }
+
+        resultDiv.innerHTML = "⏳ Predicting...";
+
+        try {
+            const res = await fetch(API_URL + url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+
+            resultDiv.innerHTML = `
+                Risk: ${data.risk_level}<br>
+                Score: ${(data.risk_score * 100).toFixed(1)}%
+            `;
+
+            showChart(data.risk_score);
+            loadHistory();
+            loadAnalytics();
+
+        } catch {
+            resultDiv.innerText = "❌ Server error";
+        }
+    });
+});
+
+// ================= CHART =================
+function showChart(score) {
+    const canvas = $("riskChart");
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+        type: "doughnut",
+        data: {
+            labels: ["Risk", "Safe"],
+            datasets: [{ data: [score, 1 - score] }]
+        }
+    });
 }
 
 // ================= CHAT =================
 async function sendMessage() {
-    const input = getEl("chatInput");
+    const input = $("chatInput");
     const msg = input.value.trim();
     if (!msg) return;
 
-    const box = getEl("chatMessages");
+    const box = $("chatMessages");
 
     box.innerHTML += `<p>🧑 ${msg}</p>`;
     input.value = "";
@@ -239,7 +345,6 @@ async function sendMessage() {
 
         box.innerHTML += `<p>🤖 ${data.reply}</p>`;
 
-        // SAVE CHAT
         chatHistory.push({ role: "user", content: msg });
         chatHistory.push({ role: "bot", content: data.reply });
         localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
@@ -253,7 +358,7 @@ async function sendMessage() {
 
 // ================= LOAD CHAT =================
 function loadChatHistory() {
-    const box = getEl("chatMessages");
+    const box = $("chatMessages");
     if (!box) return;
 
     chatHistory.forEach(msg => {
