@@ -1,0 +1,312 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+
+/* GLOBAL */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background: radial-gradient(circle at top, #0f172a, #020617);
+    color: white;
+    overflow-x: hidden;
+}
+
+/* 🔥 GLOW TEXT */
+.glow {
+    color: #38bdf8;
+    text-shadow: 0 0 10px #38bdf8, 0 0 20px #06b6d4;
+}
+
+/* CENTER LOGIN */
+.center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    animation: fadeIn 1s ease;
+}
+
+/* INPUT */
+input {
+    padding: 12px;
+    margin: 10px;
+    border-radius: 12px;
+    border: none;
+    width: 250px;
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    outline: none;
+    backdrop-filter: blur(10px);
+}
+
+input:focus {
+    box-shadow: 0 0 15px #38bdf8;
+    transform: scale(1.03);
+}
+
+/* BUTTON */
+button {
+    padding: 12px 18px;
+    margin: 8px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    color: white;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    font-weight: 500;
+}
+
+button:hover {
+    transform: scale(1.07);
+    box-shadow: 0 0 25px #3b82f6;
+}
+
+/* BUTTON SHINE */
+button::after {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    top: 0;
+    left: -100%;
+    transition: 0.6s;
+}
+
+button:hover::after {
+    left: 100%;
+}
+
+/* ACTIVE */
+.active-btn {
+    background: linear-gradient(135deg, #06b6d4, #3b82f6) !important;
+    box-shadow: 0 0 20px #38bdf8;
+}
+
+/* SIDEBAR */
+.sidebar {
+    position: fixed;
+    width: 230px;
+    height: 100%;
+    padding: 25px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(25px);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar h2 {
+    color: #38bdf8;
+    margin-bottom: 20px;
+}
+
+.sidebar button {
+    width: 100%;
+}
+
+/* MAIN */
+.main {
+    margin-left: 230px;
+    padding: 40px;
+    max-width: 1200px;
+}
+
+/* CARDS */
+.card {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 25px;
+    border-radius: 20px;
+    margin-bottom: 25px;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.6s ease;
+}
+
+.card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 0 30px rgba(56, 189, 248, 0.3);
+}
+
+/* FORM */
+#simpleFields,
+#heartFields,
+#diabetesFields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* HISTORY */
+.history-card {
+    background: rgba(255, 255, 255, 0.06);
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 10px;
+    border-left: 3px solid #38bdf8;
+}
+
+/* RESULT */
+.result {
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: 15px;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid #38bdf8;
+}
+
+/* CHART */
+canvas {
+    max-width: 500px;
+    margin-top: 20px;
+}
+
+/* LOADER */
+.loader {
+    font-size: 18px;
+    color: #38bdf8;
+    animation: pulse 1.5s infinite;
+}
+
+/* 💬 CHAT BUTTON */
+#chat-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #3b82f6;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 0 20px #3b82f6;
+}
+
+/* 🤖 CHATBOX */
+#chatbot {
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    width: 320px;
+    max-height: 450px;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(25px);
+    border-radius: 15px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* HEADER */
+#chat-header {
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    padding: 12px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* CHAT BOX */
+#chat-box {
+    height: 260px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+/* USER */
+.user {
+    text-align: right;
+    color: #38bdf8;
+}
+
+/* BOT */
+.bot {
+    text-align: left;
+    color: #22c55e;
+}
+
+/* INPUT */
+#chat-input-area {
+    display: flex;
+}
+
+#chat-input {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+/* ANIMATIONS */
+@keyframes pulse {
+    0% {
+        opacity: 0.3;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0.3;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* HIDDEN */
+.hidden {
+    display: none !important;
+}
+
+/* 📱 MOBILE RESPONSIVE */
+@media (max-width: 768px) {
+
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+    }
+
+    .main {
+        margin-left: 0;
+        padding: 20px;
+    }
+
+    input {
+        width: 90%;
+    }
+
+    canvas {
+        max-width: 100%;
+    }
+}

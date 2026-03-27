@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Health Scanner</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+
+    <!-- ================= LOGIN ================= -->
+    <div id="loginPage" class="center">
+        <h1 class="glow">🧠 AI Health Scanner</h1>
+
+        <input id="email" placeholder="Email"><br>
+        <input id="password" type="password" placeholder="Password"><br>
+
+        <button onclick="login()">Login</button>
+        <button onclick="register()">Register</button>
+
+        <p id="loginStatus"></p>
+    </div>
+
+    <!-- ================= DASHBOARD ================= -->
+    <div id="dashboard" class="hidden">
+
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <h2>⚡ AI Health</h2>
+
+            <button onclick="setMode('simple', event)">🟢 Simple</button>
+            <button onclick="setMode('heart', event)">❤️ Heart</button>
+            <button onclick="setMode('diabetes', event)">🩸 Diabetes</button>
+
+            <hr>
+
+            <button onclick="logout()">🚪 Logout</button>
+        </div>
+
+        <!-- MAIN -->
+        <div class="main">
+
+            <!-- PROFILE -->
+            <div id="profileBox" class="card"></div>
+
+            <!-- HISTORY -->
+            <div class="card">
+                <h2>📊 History</h2>
+                <div id="history"></div>
+            </div>
+
+            <!-- ANALYTICS -->
+            <div class="card">
+                <h2>📈 Analytics</h2>
+                <canvas id="analyticsChart"></canvas>
+            </div>
+
+            <!-- PREDICTION -->
+            <div class="card">
+                <h2>🧠 AI Prediction</h2>
+
+                <form id="healthForm">
+
+                    <!-- SIMPLE -->
+                    <div id="simpleFields">
+                        <input id="age" placeholder="Age">
+                        <input id="glucose" placeholder="Glucose">
+                        <input id="bp" placeholder="BP">
+                        <input id="bmi" placeholder="BMI">
+                    </div>
+
+                    <!-- HEART -->
+                    <div id="heartFields" class="hidden">
+                        <input id="h_age" placeholder="Age">
+                        <input id="sex" placeholder="Sex">
+                        <input id="trestbps" placeholder="BP">
+                        <input id="chol" placeholder="Cholesterol">
+                        <input id="thalach" placeholder="Max HR">
+                        <input id="oldpeak" placeholder="Oldpeak">
+                    </div>
+
+                    <!-- DIABETES -->
+                    <div id="diabetesFields" class="hidden">
+                        <input id="preg" placeholder="Pregnancies">
+                        <input id="d_glucose" placeholder="Glucose">
+                        <input id="pressure" placeholder="BP">
+                        <input id="skin" placeholder="Skin">
+                        <input id="insulin" placeholder="Insulin">
+                        <input id="d_bmi" placeholder="BMI">
+                        <input id="dpf" placeholder="DPF">
+                        <input id="d_age" placeholder="Age">
+                    </div>
+
+                    <br>
+
+                    <button type="submit">⚡ Run AI Scan</button>
+                </form>
+
+                <!-- RESULT -->
+                <div id="result" class="result hidden"></div>
+
+                <!-- ACTION BUTTONS -->
+                <div style="margin-top:15px;">
+                    <button onclick="downloadPDF()">📄 Download Report</button>
+                </div>
+
+                <!-- CHART -->
+                <canvas id="riskChart"></canvas>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ================= CHAT FLOAT ================= -->
+    <div id="chat-toggle" onclick="toggleChat()">💬</div>
+
+    <!-- ================= CHATBOT ================= -->
+    <div id="chatbot" class="hidden">
+
+        <div id="chat-header">
+            🤖 AI Assistant
+            <span onclick="toggleChat()">✖</span>
+        </div>
+
+        <div id="chat-box"></div>
+
+        <div id="chat-input-area">
+            <input id="chat-input" placeholder="Ask anything about health...">
+            <button onclick="sendMessage()">Send</button>
+            <button onclick="startListening()">🎤</button>
+        </div>
+
+    </div>
+
+    <!-- SCRIPT -->
+    <script src="script.js"></script>
+
+</body>
+
+</html>

@@ -16,8 +16,6 @@ from openai import OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecret")
 
-print("🔑 OPENAI_API_KEY:", OPENAI_API_KEY)  # DEBUG
-
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 DATABASE_URL = "sqlite:///./users.db"
@@ -116,9 +114,6 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
-class AvatarUpdate(BaseModel):
-    avatar: str
-
 class ChatRequest(BaseModel):
     message: str
 
@@ -143,23 +138,32 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     token = create_token({"sub": user.email})
     return {"access_token": token}
 
-# ================= CHAT =================
+# ================= CHAT (REAL AI) =================
 @app.post("/chat")
 def chat(data: ChatRequest):
 
-    if not OPENAI_API_KEY:
-        return {"reply": "❌ OPENAI_API_KEY not set on server"}
+    if not client:
+        return {"reply": "❌ OpenAI API key not configured"}
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful AI health assistant."},
+                {
+                    "role": "system",
+                    "content": """You are a professional AI health assistant.
+Give short, clear, and helpful advice.
+Avoid complex medical terms.
+Always suggest consulting a doctor for serious issues."""
+                },
                 {"role": "user", "content": data.message}
-            ]
+            ],
+            max_tokens=150
         )
 
-        return {"reply": response.choices[0].message.content}
+        reply = response.choices[0].message.content.strip()
+
+        return {"reply": reply}
 
     except Exception as e:
-        return {"reply": f"❌ ERROR: {str(e)}"}
+        return {"reply": f"❌ AI Error: {str(e)}"}

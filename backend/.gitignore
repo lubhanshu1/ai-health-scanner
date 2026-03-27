@@ -1,19 +1,32 @@
-# Python
+# ================= PYTHON =================
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 *.sqlite3
 *.db
+*.pkl
+*.csv
 
-# Virtual environment
-venv/
-.venv/
-env/
+# ================= NODE =================
+node_modules/
+package-lock.json
 
-# Environment variables
+# ================= ENV =================
 .env
 
-# OS files
+# ================= ANDROID / CAPACITOR =================
+android/
+ios/
+
+# ================= BUILD =================
+dist/
+build/
+
+# ================= EDITOR =================
+.vscode/
+.idea/
+
+# ================= SYSTEM =================
 .DS_Store
 Thumbs.db
