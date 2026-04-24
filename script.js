@@ -1,35 +1,52 @@
-const API_URL = "https://ai-health-backend-g329.onrender.com";
+const API_URL = "http://127.0.0.1:8000";
 
 let mode = "simple";
-let chart;
 let analyticsChart;
+let stream = null;
 
-// 📄 STORE LAST RESULT FOR PDF
-let lastRisk = "";
-let lastScore = 0;
+// ================= HELPER =================
+function getAuthHeaders() {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+        console.warn("No token found!");
+        return {};
+    }
+
+    return {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+    };
+}
 
 // ================= INIT =================
 window.onload = () => {
     const token = localStorage.getItem("token");
 
-    // 🔥 FIX: Proper UI control
     if (token) {
         showDashboard();
-        loadProfile();
-        loadHistory();
-        loadAnalytics();
+
+        setTimeout(() => {
+            loadProfile();
+            loadHistory();
+            loadAnalytics();
+        }, 500);
+
         setMode("simple");
     } else {
         showLogin();
     }
-
-    loadChatHistory?.();
 
     const input = document.getElementById("chat-input");
     if (input) {
         input.addEventListener("keypress", (e) => {
             if (e.key === "Enter") sendMessage();
         });
+    }
+
+    const form = document.getElementById("healthForm");
+    if (form) {
+        form.addEventListener("submit", handleFormSubmit);
     }
 };
 
@@ -40,41 +57,21 @@ function showDashboard() {
 }
 
 function showLogin() {
-    document.getElementById("loginPage").style.display = "block";
+    document.getElementById("loginPage").style.display = "flex";
     document.getElementById("dashboard").style.display = "none";
-}
-
-// ================= CHAT TOGGLE =================
-function toggleChat() {
-    document.getElementById("chatbot").classList.toggle("hidden");
-}
-
-// ================= MODE =================
-function setMode(selected, event) {
-    mode = selected;
-
-    document.querySelectorAll(".sidebar button").forEach(btn => {
-        btn.classList.remove("active-btn");
-    });
-
-    if (event) event.target.classList.add("active-btn");
-
-    ["simpleFields", "heartFields", "diabetesFields"].forEach(id => {
-        document.getElementById(id).style.display = "none";
-    });
-
-    document.getElementById(mode + "Fields").style.display = "flex";
 }
 
 // ================= LOGIN =================
 async function login() {
+    showLoader("Logging in...");
+
     try {
         const res = await fetch(`${API_URL}/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                email: document.getElementById("email").value,
-                password: document.getElementById("password").value
+                email: email.value,
+                password: password.value
             })
         });
 
@@ -82,94 +79,120 @@ async function login() {
 
         if (res.ok) {
             localStorage.setItem("token", data.access_token);
+            showSuccess("Login successful 🚀");
 
-            // 🔥 FIX: No reload, direct UI switch
-            showDashboard();
-            loadProfile();
-            loadHistory();
-            loadAnalytics();
-            setMode("simple");
+            setTimeout(() => {
+                showDashboard();
+                loadProfile();
+                loadHistory();
+                loadAnalytics();
+            }, 500);
 
         } else {
-            document.getElementById("loginStatus").innerText = data.detail;
+            showError(data.detail || "Login failed");
         }
 
     } catch {
-        document.getElementById("loginStatus").innerText = "Server error!";
+        showError("Server error!");
     }
 }
 
 // ================= REGISTER =================
 async function register() {
     try {
-        await fetch(`${API_URL}/register`, {
+        const res = await fetch(`${API_URL}/register`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                email: document.getElementById("email").value,
-                password: document.getElementById("password").value
+                email: email.value,
+                password: password.value
             })
         });
 
-        document.getElementById("loginStatus").innerText = "✅ Registered! Now login.";
+        const data = await res.json();
+
+        if (res.ok) {
+            showSuccess("Registered! Now login.");
+        } else {
+            showError(data.detail);
+        }
 
     } catch {
-        document.getElementById("loginStatus").innerText = "Error registering!";
+        showError("Register failed");
     }
 }
 
 // ================= LOGOUT =================
 function logout() {
-    localStorage.removeItem("token");
-    showLogin(); // 🔥 FIX: no reload
+    localStorage.clear();
+    location.reload();
 }
 
 // ================= PROFILE =================
 async function loadProfile() {
     try {
         const res = await fetch(`${API_URL}/profile`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+            headers: getAuthHeaders()
         });
 
-        const user = await res.json();
+        if (res.status === 401) {
+            logout();
+            return;
+        }
 
-        document.getElementById("profileBox").innerHTML = `
-            <div style="text-align:center">
-                <img src="${user.avatar || 'https://via.placeholder.com/70'}"
-                     width="70"
-                     style="border-radius:50%; box-shadow:0 0 10px #38bdf8"><br><br>
-                <b>${user.email || "User"}</b>
-            </div>
-        `;
+        const user = await res.json();
+        document.getElementById("profileBox").innerHTML =
+            `<h2>👤 ${user.email || "User"}</h2>`;
     } catch {
-        document.getElementById("profileBox").innerHTML = "⚠️ Profile not available";
+        document.getElementById("profileBox").innerHTML = "⚠️ Profile error";
     }
 }
 
 // ================= HISTORY =================
 async function loadHistory() {
-    const res = await fetch(`${API_URL}/history`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-    });
+    try {
+        const res = await fetch(`${API_URL}/history`, {
+            headers: getAuthHeaders()
+        });
 
-    const data = await res.json();
-    document.getElementById("history").innerHTML = "";
+        if (res.status === 401) {
+            logout();
+            return;
+        }
 
-    data.forEach(i => {
-        document.getElementById("history").innerHTML += `
-        <div class="history-card">
-            <b>${i.type}</b><br>
-            ${i.risk} (${i.score}%)
-        </div>`;
-    });
+        const data = await res.json();
+
+        const container = document.getElementById("history");
+        container.innerHTML = "";
+
+        if (!data.length) {
+            container.innerHTML = "No history yet";
+            return;
+        }
+
+        data.forEach(i => {
+            container.innerHTML += `
+                <div class="history-card">
+                    ${i.result} (${(i.score * 100).toFixed(1)}%)
+                </div>`;
+        });
+
+    } catch {
+        document.getElementById("history").innerHTML = "⚠️ History error";
+    }
 }
 
 // ================= ANALYTICS =================
 async function loadAnalytics() {
     try {
         const res = await fetch(`${API_URL}/analytics`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+            headers: getAuthHeaders()
         });
+
+        if (res.status === 401) {
+            logout();
+            return;
+        }
 
         const data = await res.json();
 
@@ -178,119 +201,14 @@ async function loadAnalytics() {
         analyticsChart = new Chart(document.getElementById("analyticsChart"), {
             type: "bar",
             data: {
-                labels: ["Low", "Moderate", "High"],
+                labels: ["Total", "High Risk"],
                 datasets: [{
-                    label: "Risk",
-                    data: [data.low || 0, data.moderate || 0, data.high || 0],
-                    backgroundColor: ["#22c55e", "#facc15", "#ef4444"]
+                    data: [data.total_scans || 0, data.high_risk_cases || 0]
                 }]
             }
         });
 
-    } catch {
-        console.log("Analytics error");
-    }
-}
-
-// ================= PREDICT =================
-document.getElementById("healthForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-        alert("Please login first!");
-        showLogin();
-        return;
-    }
-
-    const result = document.getElementById("result");
-
-    result.classList.remove("hidden");
-    result.innerHTML = `<div class="loader">🤖 AI analyzing...</div>`;
-
-    let url = "", body = {};
-
-    if (mode === "simple") {
-        url = "/predict-simple";
-        body = { age: +age.value, glucose: +glucose.value, bp: +bp.value, bmi: +bmi.value };
-    } else if (mode === "heart") {
-        url = "/heart-risk";
-        body = { age: +h_age.value, sex: +sex.value, trestbps: +trestbps.value, chol: +chol.value, thalach: +thalach.value, oldpeak: +oldpeak.value };
-    } else {
-        url = "/diabetes-risk";
-        body = {
-            Pregnancies: +preg.value,
-            Glucose: +d_glucose.value,
-            BloodPressure: +pressure.value,
-            SkinThickness: +skin.value,
-            Insulin: +insulin.value,
-            BMI: +d_bmi.value,
-            DiabetesPedigreeFunction: +dpf.value,
-            Age: +d_age.value
-        };
-    }
-
-    const res = await fetch(API_URL + url, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(body)
-    });
-
-    const data = await res.json();
-
-    let risk = data.risk_level || "Low";
-    let score = data.risk_score || 0.2;
-
-    lastRisk = risk;
-    lastScore = score;
-
-    result.innerHTML = `
-        <b style="font-size:20px;">
-            ${risk} Risk (${(score * 100).toFixed(1)}%)
-        </b>
-    `;
-
-    if (chart) chart.destroy();
-
-    chart = new Chart(document.getElementById("riskChart"), {
-        type: "doughnut",
-        data: {
-            labels: ["Risk", "Safe"],
-            datasets: [{
-                data: [score, 1 - score],
-                backgroundColor: ["#ef4444", "#22c55e"]
-            }]
-        }
-    });
-
-    loadHistory();
-    loadAnalytics();
-});
-
-// ================= PDF =================
-function downloadPDF() {
-    if (!lastRisk) {
-        alert("No data available!");
-        return;
-    }
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    const date = new Date().toLocaleString();
-
-    doc.setFontSize(18);
-    doc.text("AI Health Report", 20, 20);
-
-    doc.setFontSize(12);
-    doc.text(`Date: ${date}`, 20, 40);
-    doc.text(`Risk Level: ${lastRisk}`, 20, 60);
-    doc.text(`Risk Score: ${(lastScore * 100).toFixed(1)}%`, 20, 80);
-
-    doc.save("AI_Health_Report.pdf");
+    } catch { }
 }
 
 // ================= CHAT =================
@@ -298,22 +216,49 @@ async function sendMessage() {
     const input = document.getElementById("chat-input");
     const chatBox = document.getElementById("chat-box");
 
-    const userText = input.value.trim();
-    if (!userText) return;
+    const text = input.value.trim();
+    if (!text) return;
 
-    chatBox.innerHTML += `<div class="user">You: ${userText}</div>`;
-    chatBox.innerHTML += `<div class="bot">AI: typing...</div>`;
+    chatBox.innerHTML += `<div>🧑 ${text}</div>`;
 
-    const res = await fetch(API_URL + "/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userText })
-    });
+    try {
+        const res = await fetch(`${API_URL}/chat`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ message: text })
+        });
 
-    const data = await res.json();
+        const data = await res.json();
 
-    chatBox.lastChild.remove();
-    chatBox.innerHTML += `<div class="bot">AI: ${data.reply}</div>`;
+        chatBox.innerHTML += `<div>🤖 ${data.reply}</div>`;
+        speakText(data.reply);
+
+    } catch {
+        chatBox.innerHTML += `<div>⚠️ Error</div>`;
+    }
 
     input.value = "";
+}
+
+// ================= VOICE =================
+function startListening() {
+    if (!('webkitSpeechRecognition' in window)) {
+        alert("Voice not supported");
+        return;
+    }
+
+    const recognition = new webkitSpeechRecognition();
+    recognition.start();
+
+    recognition.onresult = function (event) {
+        const text = event.results[0][0].transcript;
+        document.getElementById("chat-input").value = text;
+        sendMessage();
+    };
+}
+
+// ================= SPEECH =================
+function speakText(text) {
+    const speech = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.speak(speech);
 }

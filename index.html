@@ -8,33 +8,78 @@
 
     <link rel="stylesheet" href="style.css">
 
-    <!-- Charts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- PDF -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #dashboard {
+            display: none;
+            height: 100vh;
+        }
+
+        .main {
+            padding: 20px;
+            overflow-y: auto;
+            height: 100vh;
+        }
+
+        /* ✅ FIX INPUT ISSUE */
+        #symptomsInput {
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+            border-radius: 10px;
+            border: none;
+            outline: none;
+            margin-bottom: 10px;
+        }
+
+        .result {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .full {
+            width: 100%;
+        }
+    </style>
 </head>
 
 <body>
 
-    <!-- ================= LOGIN ================= -->
-    <div id="loginPage" class="center">
+    <!-- LOGIN -->
+    <div id="loginPage" class="center glass">
         <h1 class="glow">🧠 AI Health Scanner</h1>
 
-        <input id="email" placeholder="Email"><br>
-        <input id="password" type="password" placeholder="Password"><br>
+        <div class="input-group">
+            <input id="email" placeholder="Email">
+            <input id="password" type="password" placeholder="Password">
+        </div>
 
-        <button onclick="login()">Login</button>
-        <button onclick="register()">Register</button>
+        <div class="btn-group">
+            <button class="primary" onclick="login()">Login</button>
+            <button class="secondary" onclick="register()">Register</button>
+        </div>
 
         <p id="loginStatus"></p>
     </div>
 
-    <!-- ================= DASHBOARD ================= -->
-    <div id="dashboard" class="hidden">
+    <!-- DASHBOARD -->
+    <div id="dashboard">
 
         <!-- SIDEBAR -->
-        <div class="sidebar">
+        <div class="sidebar glass">
             <h2>⚡ AI Health</h2>
 
             <button onclick="setMode('simple', event)">🟢 Simple</button>
@@ -43,6 +88,7 @@
 
             <hr>
 
+            <button onclick="openScan()">📸 Scan</button>
             <button onclick="logout()">🚪 Logout</button>
         </div>
 
@@ -61,126 +107,58 @@
                 <canvas id="analyticsChart"></canvas>
             </div>
 
+            <!-- 🧠 AI PREDICTION -->
             <div class="card">
                 <h2>🧠 AI Prediction</h2>
 
-                <form id="healthForm">
+                <!-- ✅ SIMPLE MODE -->
+                <div id="simpleFields">
+                    <input id="symptomsInput" placeholder="Enter symptoms (e.g. fever cough headache)">
 
-                    <div id="simpleFields">
-                        <input id="age" placeholder="Age">
-                        <input id="glucose" placeholder="Glucose">
-                        <input id="bp" placeholder="BP">
-                        <input id="bmi" placeholder="BMI">
-                    </div>
-
-                    <div id="heartFields" class="hidden">
-                        <input id="h_age" placeholder="Age">
-                        <input id="sex" placeholder="Sex">
-                        <input id="trestbps" placeholder="BP">
-                        <input id="chol" placeholder="Cholesterol">
-                        <input id="thalach" placeholder="Max HR">
-                        <input id="oldpeak" placeholder="Oldpeak">
-                    </div>
-
-                    <div id="diabetesFields" class="hidden">
-                        <input id="preg" placeholder="Pregnancies">
-                        <input id="d_glucose" placeholder="Glucose">
-                        <input id="pressure" placeholder="BP">
-                        <input id="skin" placeholder="Skin">
-                        <input id="insulin" placeholder="Insulin">
-                        <input id="d_bmi" placeholder="BMI">
-                        <input id="dpf" placeholder="DPF">
-                        <input id="d_age" placeholder="Age">
-                    </div>
-
-                    <br>
-
-                    <button type="submit">⚡ Run AI Scan</button>
-                </form>
-
-                <div id="result" class="result hidden"></div>
-
-                <div style="margin-top:15px;">
-                    <button onclick="downloadPDF()">📄 Download Report</button>
+                    <button class="primary full" onclick="runSimplePrediction()">
+                        ⚡ Predict Disease
+                    </button>
                 </div>
 
-                <canvas id="riskChart"></canvas>
+                <!-- ❤️ HEART MODE -->
+                <div id="heartFields" class="hidden">
+                    <input placeholder="Age">
+                    <input placeholder="Cholesterol">
+                    <input placeholder="BP">
+                    <button class="primary full">❤️ Predict Heart Risk</button>
+                </div>
+
+                <!-- 🩸 DIABETES MODE -->
+                <div id="diabetesFields" class="hidden">
+                    <input placeholder="Glucose">
+                    <input placeholder="BMI">
+                    <input placeholder="Insulin">
+                    <button class="primary full">🩸 Predict Diabetes</button>
+                </div>
+
+                <!-- RESULT -->
+                <div id="result" class="result hidden"></div>
             </div>
 
         </div>
     </div>
 
-    <!-- ================= CHAT ================= -->
+    <!-- CAMERA -->
+    <div id="scanModal" class="hidden">
+        <video id="camera" autoplay></video>
+        <button onclick="captureScan()">Capture</button>
+        <button onclick="closeScan()">Close</button>
+    </div>
+
+    <!-- CHAT -->
     <div id="chat-toggle" onclick="toggleChat()">💬</div>
 
     <div id="chatbot" class="hidden">
-        <div id="chat-header">
-            🤖 AI Assistant
-            <span onclick="toggleChat()">✖</span>
-        </div>
-
         <div id="chat-box"></div>
-
-        <div id="chat-input-area">
-            <input id="chat-input" placeholder="Ask anything about health...">
-            <button onclick="sendMessage()">Send</button>
-            <button onclick="startListening()">🎤</button>
-        </div>
+        <input id="chat-input" placeholder="Ask something...">
+        <button onclick="sendMessage()">Send</button>
     </div>
 
-    <!-- ================= MAIN SCRIPT ================= -->
-    <script>
-
-        // 🔥 AUTO CHECK LOGIN (IMPORTANT FIX)
-        window.onload = function () {
-            const user = localStorage.getItem("user");
-
-            if (user) {
-                showDashboard(user);
-            } else {
-                showLogin();
-            }
-        };
-
-        function showDashboard(user) {
-            document.getElementById("loginPage").style.display = "none";
-            document.getElementById("dashboard").style.display = "flex";
-
-            document.getElementById("profileBox").innerHTML =
-                `<h2>👤 ${user}</h2>`;
-        }
-
-        function showLogin() {
-            document.getElementById("loginPage").style.display = "block";
-            document.getElementById("dashboard").style.display = "none";
-        }
-
-        function login() {
-            const email = document.getElementById("email").value;
-            const password = document.getElementById("password").value;
-
-            if (email && password) {
-                localStorage.setItem("user", email);
-                showDashboard(email);
-            } else {
-                document.getElementById("loginStatus").innerText =
-                    "⚠️ Enter email & password";
-            }
-        }
-
-        function register() {
-            document.getElementById("loginStatus").innerText =
-                "✅ Registered (demo)";
-        }
-
-        function logout() {
-            localStorage.removeItem("user");
-            showLogin();
-        }
-
-    </script>
-
-    <!-- YOUR OLD SCRIPT -->
     <script src="script.js"></script>
 
 </body>

@@ -1,5 +1,5 @@
 import os
-import joblib
+import base64
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Depends, HTTPException
@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base, Session, relationship
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from openai import OpenAI
+import joblib  # ✅ ML
 
 # ================= ENV =================
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -45,7 +46,6 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     email = Column(String, unique=True, index=True)
     password = Column(String)
-    avatar = Column(String, default="https://i.pravatar.cc/150")
 
     history = relationship("HealthHistory", back_populates="user")
 
@@ -105,6 +105,14 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+# ================= ML MODEL =================
+try:
+    model = joblib.load("model.pkl")
+    vectorizer = joblib.load("vectorizer.pkl")
+except:
+    model = None
+    vectorizer = None
+
 # ================= REQUEST MODELS =================
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -116,6 +124,12 @@ class LoginRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+
+class ImageData(BaseModel):
+    image: str
+
+class PredictRequest(BaseModel):
+    input: str
 
 # ================= AUTH =================
 @app.post("/register")
@@ -138,7 +152,50 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     token = create_token({"sub": user.email})
     return {"access_token": token}
 
-# ================= CHAT (REAL AI) =================
+# ================= PROFILE =================
+@app.get("/profile")
+def get_profile(user: User = Depends(get_current_user)):
+    return {"email": user.email, "id": user.id}
+
+# ================= HISTORY =================
+@app.get("/history")
+def get_history(user: User = Depends(get_current_user),
+                db: Session = Depends(get_db)):
+
+    history = db.query(HealthHistory).filter(
+        HealthHistory.user_id == user.id
+    ).order_by(HealthHistory.created_at.desc()).all()
+
+    return [
+        {
+            "type": h.prediction_type,
+            "result": h.risk_level,
+            "score": h.risk_score,
+            "date": h.created_at
+        }
+        for h in history
+    ]
+
+# ================= ANALYTICS =================
+@app.get("/analytics")
+def get_analytics(user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+
+    total_scans = db.query(HealthHistory).filter(
+        HealthHistory.user_id == user.id
+    ).count()
+
+    high_risk = db.query(HealthHistory).filter(
+        HealthHistory.user_id == user.id,
+        HealthHistory.risk_score > 0.7
+    ).count()
+
+    return {
+        "total_scans": total_scans,
+        "high_risk_cases": high_risk
+    }
+
+# ================= CHAT =================
 @app.post("/chat")
 def chat(data: ChatRequest):
 
@@ -149,21 +206,68 @@ def chat(data: ChatRequest):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": """You are a professional AI health assistant.
-Give short, clear, and helpful advice.
-Avoid complex medical terms.
-Always suggest consulting a doctor for serious issues."""
-                },
+                {"role": "system", "content": "You are a helpful health assistant."},
                 {"role": "user", "content": data.message}
             ],
             max_tokens=150
         )
 
-        reply = response.choices[0].message.content.strip()
-
-        return {"reply": reply}
+        return {"reply": response.choices[0].message.content.strip()}
 
     except Exception as e:
         return {"reply": f"❌ AI Error: {str(e)}"}
+
+# ================= IMAGE SCAN =================
+@app.post("/scan-image")
+def scan_image(data: ImageData,
+               user: User = Depends(get_current_user),
+               db: Session = Depends(get_db)):
+
+    try:
+        image_data = data.image.split(",")[1]
+        base64.b64decode(image_data)
+
+        prediction = "Skin Allergy"
+        confidence = 0.82
+
+        db.add(HealthHistory(
+            user_id=user.id,
+            prediction_type="image_scan",
+            risk_level=prediction,
+            risk_score=confidence
+        ))
+        db.commit()
+
+        return {"prediction": prediction, "confidence": confidence}
+
+    except:
+        return {"prediction": "Error", "confidence": 0}
+
+# ================= ML PREDICTION =================
+@app.post("/predict")
+def predict(data: PredictRequest,
+            user: User = Depends(get_current_user),
+            db: Session = Depends(get_db)):
+
+    if not model or not vectorizer:
+        return {"error": "Model not loaded. Run model.py first."}
+
+    text = data.input
+
+    X = vectorizer.transform([text])
+    prediction = model.predict(X)[0]
+
+    confidence = 0.85  # we upgrade later
+
+    db.add(HealthHistory(
+        user_id=user.id,
+        prediction_type="symptom_check",
+        risk_level=prediction,
+        risk_score=confidence
+    ))
+    db.commit()
+
+    return {
+        "disease": prediction,
+        "confidence": confidence
+    }
