@@ -5,8 +5,6 @@ __pycache__/
 *.pyd
 *.sqlite3
 *.db
-*.pkl
-*.csv
 
 # ================= NODE =================
 node_modules/
