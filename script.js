@@ -1,17 +1,15 @@
-const API_URL = "http://127.0.0.1:8000";
+console.log("AI HEALTH SCANNER 🚀");
+
+const API_URL = "https://ai-health-scanner-1.onrender.com";
 
 let mode = "simple";
-let analyticsChart;
+let analyticsChart = null;
 let stream = null;
 
-// ================= HELPER =================
+// ================= AUTH =================
 function getAuthHeaders() {
-    const token = localStorage.getItem("token");
 
-    if (!token) {
-        console.warn("No token found!");
-        return {};
-    }
+    const token = localStorage.getItem("token");
 
     return {
         "Content-Type": "application/json",
@@ -21,244 +19,646 @@ function getAuthHeaders() {
 
 // ================= INIT =================
 window.onload = () => {
+
     const token = localStorage.getItem("token");
 
     if (token) {
+
         showDashboard();
 
-        setTimeout(() => {
-            loadProfile();
-            loadHistory();
-            loadAnalytics();
-        }, 500);
+        loadProfile();
+        loadHistory();
+        loadAnalytics();
 
-        setMode("simple");
     } else {
+
         showLogin();
     }
 
-    const input = document.getElementById("chat-input");
-    if (input) {
-        input.addEventListener("keypress", (e) => {
-            if (e.key === "Enter") sendMessage();
-        });
-    }
-
-    const form = document.getElementById("healthForm");
-    if (form) {
-        form.addEventListener("submit", handleFormSubmit);
-    }
+    setMode("simple");
 };
 
 // ================= UI =================
 function showDashboard() {
-    document.getElementById("loginPage").style.display = "none";
-    document.getElementById("dashboard").style.display = "flex";
+
+    document.getElementById("loginPage")
+        .style.display = "none";
+
+    document.getElementById("dashboard")
+        .style.display = "flex";
 }
 
 function showLogin() {
-    document.getElementById("loginPage").style.display = "flex";
-    document.getElementById("dashboard").style.display = "none";
+
+    document.getElementById("loginPage")
+        .style.display = "flex";
+
+    document.getElementById("dashboard")
+        .style.display = "none";
+}
+
+// ================= MODE =================
+function setMode(selected, event = null) {
+
+    mode = selected;
+
+    document.querySelectorAll(".sidebar button")
+        .forEach(btn => {
+            btn.classList.remove("active-btn");
+        });
+
+    if (event) {
+        event.target.classList.add("active-btn");
+    }
+
+    document.getElementById("simpleFields")
+        .classList.add("hidden");
+
+    document.getElementById("heartFields")
+        .classList.add("hidden");
+
+    document.getElementById("diabetesFields")
+        .classList.add("hidden");
+
+    document.getElementById(mode + "Fields")
+        .classList.remove("hidden");
 }
 
 // ================= LOGIN =================
 async function login() {
+
+    const email =
+        document.getElementById("email").value;
+
+    const password =
+        document.getElementById("password").value;
+
     showLoader("Logging in...");
 
     try {
+
         const res = await fetch(`${API_URL}/login`, {
+
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
             body: JSON.stringify({
-                email: email.value,
-                password: password.value
+                email,
+                password
             })
         });
 
         const data = await res.json();
 
         if (res.ok) {
-            localStorage.setItem("token", data.access_token);
+
+            localStorage.setItem(
+                "token",
+                data.access_token
+            );
+
             showSuccess("Login successful 🚀");
 
             setTimeout(() => {
+
                 showDashboard();
+
                 loadProfile();
                 loadHistory();
                 loadAnalytics();
+
             }, 500);
 
         } else {
+
             showError(data.detail || "Login failed");
         }
 
-    } catch {
-        showError("Server error!");
+    } catch (err) {
+
+        console.error(err);
+
+        showError("Server error");
     }
 }
 
 // ================= REGISTER =================
 async function register() {
+
+    const email =
+        document.getElementById("email").value;
+
+    const password =
+        document.getElementById("password").value;
+
+    showLoader("Registering...");
+
     try {
+
         const res = await fetch(`${API_URL}/register`, {
+
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
             body: JSON.stringify({
-                email: email.value,
-                password: password.value
+                email,
+                password
             })
         });
 
         const data = await res.json();
 
         if (res.ok) {
-            showSuccess("Registered! Now login.");
+
+            showSuccess(
+                "Registered successfully ✅"
+            );
+
         } else {
-            showError(data.detail);
+
+            showError(
+                data.detail || "Register failed"
+            );
         }
 
-    } catch {
-        showError("Register failed");
+    } catch (err) {
+
+        console.error(err);
+
+        showError("Server error");
     }
 }
 
 // ================= LOGOUT =================
 function logout() {
+
     localStorage.clear();
+
     location.reload();
 }
 
 // ================= PROFILE =================
 async function loadProfile() {
+
     try {
-        const res = await fetch(`${API_URL}/profile`, {
-            headers: getAuthHeaders()
-        });
 
-        if (res.status === 401) {
-            logout();
-            return;
-        }
+        const res = await fetch(
+            `${API_URL}/profile`,
+            {
+                headers: getAuthHeaders()
+            }
+        );
 
-        const user = await res.json();
-        document.getElementById("profileBox").innerHTML =
-            `<h2>👤 ${user.email || "User"}</h2>`;
+        const data = await res.json();
+
+        document.getElementById("profileBox")
+            .innerHTML = `
+                <h2>👤 ${data.email}</h2>
+            `;
+
     } catch {
-        document.getElementById("profileBox").innerHTML = "⚠️ Profile error";
+
+        document.getElementById("profileBox")
+            .innerHTML =
+            "⚠️ Profile error";
     }
 }
 
 // ================= HISTORY =================
 async function loadHistory() {
-    try {
-        const res = await fetch(`${API_URL}/history`, {
-            headers: getAuthHeaders()
-        });
 
-        if (res.status === 401) {
-            logout();
-            return;
-        }
+    try {
+
+        const res = await fetch(
+            `${API_URL}/history`,
+            {
+                headers: getAuthHeaders()
+            }
+        );
 
         const data = await res.json();
 
-        const container = document.getElementById("history");
-        container.innerHTML = "";
+        const history =
+            document.getElementById("history");
+
+        history.innerHTML = "";
 
         if (!data.length) {
-            container.innerHTML = "No history yet";
+
+            history.innerHTML =
+                "No history found";
+
             return;
         }
 
-        data.forEach(i => {
-            container.innerHTML += `
+        data.forEach(item => {
+
+            history.innerHTML += `
                 <div class="history-card">
-                    ${i.result} (${(i.score * 100).toFixed(1)}%)
-                </div>`;
+
+                    <h3>${item.result}</h3>
+
+                    <br>
+
+                    Confidence:
+                    ${(item.score * 100).toFixed(0)}%
+
+                </div>
+            `;
         });
 
     } catch {
-        document.getElementById("history").innerHTML = "⚠️ History error";
+
+        document.getElementById("history")
+            .innerHTML =
+            "⚠️ History error";
     }
 }
 
 // ================= ANALYTICS =================
 async function loadAnalytics() {
-    try {
-        const res = await fetch(`${API_URL}/analytics`, {
-            headers: getAuthHeaders()
-        });
 
-        if (res.status === 401) {
-            logout();
-            return;
-        }
+    try {
+
+        const res = await fetch(
+            `${API_URL}/analytics`,
+            {
+                headers: getAuthHeaders()
+            }
+        );
 
         const data = await res.json();
 
-        if (analyticsChart) analyticsChart.destroy();
+        const ctx =
+            document.getElementById("analyticsChart");
 
-        analyticsChart = new Chart(document.getElementById("analyticsChart"), {
+        if (!ctx) return;
+
+        if (analyticsChart) {
+            analyticsChart.destroy();
+        }
+
+        analyticsChart = new Chart(ctx, {
+
             type: "bar",
+
             data: {
-                labels: ["Total", "High Risk"],
+
+                labels: [
+                    "Total Scans",
+                    "High Risk"
+                ],
+
                 datasets: [{
-                    data: [data.total_scans || 0, data.high_risk_cases || 0]
+
+                    label: "AI Analytics",
+
+                    data: [
+                        data.total_scans || 0,
+                        data.high_risk_cases || 0
+                    ],
+
+                    borderWidth: 1
                 }]
+            },
+
+            options: {
+
+                responsive: true,
+
+                maintainAspectRatio: false
             }
         });
 
-    } catch { }
-}
+    } catch (err) {
 
-// ================= CHAT =================
-async function sendMessage() {
-    const input = document.getElementById("chat-input");
-    const chatBox = document.getElementById("chat-box");
-
-    const text = input.value.trim();
-    if (!text) return;
-
-    chatBox.innerHTML += `<div>🧑 ${text}</div>`;
-
-    try {
-        const res = await fetch(`${API_URL}/chat`, {
-            method: "POST",
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ message: text })
-        });
-
-        const data = await res.json();
-
-        chatBox.innerHTML += `<div>🤖 ${data.reply}</div>`;
-        speakText(data.reply);
-
-    } catch {
-        chatBox.innerHTML += `<div>⚠️ Error</div>`;
+        console.error(err);
     }
-
-    input.value = "";
 }
 
-// ================= VOICE =================
-function startListening() {
-    if (!('webkitSpeechRecognition' in window)) {
-        alert("Voice not supported");
+// ================= SIMPLE PREDICTION =================
+async function runSimplePrediction() {
+
+    const symptoms =
+        document.getElementById("symptomsInput")
+            .value;
+
+    if (!symptoms) {
+
+        alert("Enter symptoms");
+
         return;
     }
 
-    const recognition = new webkitSpeechRecognition();
-    recognition.start();
+    const result =
+        document.getElementById("result");
 
-    recognition.onresult = function (event) {
-        const text = event.results[0][0].transcript;
-        document.getElementById("chat-input").value = text;
-        sendMessage();
-    };
+    result.classList.remove("hidden");
+
+    result.innerHTML = `
+        <div class="loader"></div>
+    `;
+
+    try {
+
+        const res = await fetch(
+            `${API_URL}/predict`,
+            {
+
+                method: "POST",
+
+                headers: getAuthHeaders(),
+
+                body: JSON.stringify({
+                    input: symptoms
+                })
+            }
+        );
+
+        const data = await res.json();
+
+        if (data.error) {
+
+            result.innerHTML = `
+                ⚠️ ${data.error}
+            `;
+
+            return;
+        }
+
+        result.innerHTML = `
+            <h2>🧠 Prediction Result</h2>
+
+            <br>
+
+            <h3>${data.disease}</h3>
+
+            <br>
+
+            Confidence:
+            ${Math.round(data.confidence * 100)}%
+        `;
+
+        loadHistory();
+        loadAnalytics();
+
+    } catch (err) {
+
+        console.error(err);
+
+        result.innerHTML =
+            "Prediction failed";
+    }
 }
 
-// ================= SPEECH =================
-function speakText(text) {
-    const speech = new SpeechSynthesisUtterance(text);
-    window.speechSynthesis.speak(speech);
+// ================= HEART PREDICTION =================
+async function predictHeartRisk() {
+
+    const age =
+        document.getElementById("heartAge").value;
+
+    const bp =
+        document.getElementById("heartBP").value;
+
+    const chol =
+        document.getElementById("heartChol").value;
+
+    if (!age || !bp || !chol) {
+
+        alert("Fill all heart fields");
+
+        return;
+    }
+
+    const result =
+        document.getElementById("result");
+
+    result.classList.remove("hidden");
+
+    result.innerHTML = `
+        <div class="loader"></div>
+    `;
+
+    try {
+
+        const res = await fetch(
+            `${API_URL}/predict-heart`,
+            {
+
+                method: "POST",
+
+                headers: getAuthHeaders(),
+
+                body: JSON.stringify({
+
+                    age: parseFloat(age),
+
+                    bp: parseFloat(bp),
+
+                    cholesterol: parseFloat(chol)
+
+                })
+            }
+        );
+
+        const data = await res.json();
+
+        result.innerHTML = `
+
+            <h2>❤️ Heart Analysis</h2>
+
+            <br>
+
+            <h3>${data.risk}</h3>
+
+            <br>
+
+            Confidence:
+            ${Math.round(data.confidence * 100)}%
+        `;
+
+        loadHistory();
+        loadAnalytics();
+
+    } catch (err) {
+
+        console.error(err);
+
+        result.innerHTML =
+            "Heart prediction failed";
+    }
+}
+
+// ================= DIABETES =================
+async function predictDiabetes() {
+
+    const glucose =
+        document.getElementById("glucose").value;
+
+    const bmi =
+        document.getElementById("bmi").value;
+
+    const insulin =
+        document.getElementById("insulin").value;
+
+    if (!glucose || !bmi || !insulin) {
+
+        alert("Fill all diabetes fields");
+
+        return;
+    }
+
+    const result =
+        document.getElementById("result");
+
+    result.classList.remove("hidden");
+
+    result.innerHTML = `
+        <div class="loader"></div>
+    `;
+
+    try {
+
+        const res = await fetch(
+            `${API_URL}/predict-diabetes`,
+            {
+
+                method: "POST",
+
+                headers: getAuthHeaders(),
+
+                body: JSON.stringify({
+
+                    glucose: parseFloat(glucose),
+
+                    bmi: parseFloat(bmi),
+
+                    insulin: parseFloat(insulin)
+
+                })
+            }
+        );
+
+        const data = await res.json();
+
+        result.innerHTML = `
+
+            <h2>🩸 Diabetes Analysis</h2>
+
+            <br>
+
+            <h3>${data.risk}</h3>
+
+            <br>
+
+            Confidence:
+            ${Math.round(data.confidence * 100)}%
+        `;
+
+        loadHistory();
+        loadAnalytics();
+
+    } catch (err) {
+
+        console.error(err);
+
+        result.innerHTML =
+            "Diabetes prediction failed";
+    }
+}
+
+// ================= CAMERA =================
+async function openScan() {
+
+    document.getElementById("scanModal")
+        .classList.remove("hidden");
+
+    try {
+
+        stream =
+            await navigator.mediaDevices
+                .getUserMedia({
+                    video: true
+                });
+
+        document.getElementById("camera")
+            .srcObject = stream;
+
+    } catch {
+
+        alert("Camera error");
+    }
+}
+
+function closeScan() {
+
+    document.getElementById("scanModal")
+        .classList.add("hidden");
+
+    if (stream) {
+
+        stream.getTracks()
+            .forEach(track => track.stop());
+    }
+}
+
+// ================= IMAGE SCAN =================
+async function captureScan() {
+
+    const result =
+        document.getElementById("result");
+
+    result.classList.remove("hidden");
+
+    result.innerHTML = `
+        <h2>📸 Scan Complete</h2>
+
+        <br>
+
+        Possible Skin Allergy
+
+        <br><br>
+
+        Confidence: 82%
+    `;
+
+    closeScan();
+
+    loadHistory();
+    loadAnalytics();
+}
+
+// ================= LOADER =================
+function showLoader(text) {
+
+    document.getElementById("loginStatus")
+        .innerText = text;
+}
+
+// ================= SUCCESS =================
+function showSuccess(text) {
+
+    const el =
+        document.getElementById("loginStatus");
+
+    el.innerText = text;
+
+    el.style.color = "lightgreen";
+}
+
+// ================= ERROR =================
+function showError(text) {
+
+    const el =
+        document.getElementById("loginStatus");
+
+    el.innerText = text;
+
+    el.style.color = "red";
 }

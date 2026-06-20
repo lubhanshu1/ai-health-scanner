@@ -2,77 +2,64 @@
 <html lang="en">
 
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>AI Health Scanner</title>
 
+    <!-- CSS -->
     <link rel="stylesheet" href="style.css">
 
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+    <!-- GOOGLE FONT -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 
+    <!-- CHART -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <style>
-        body {
-            margin: 0;
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        #dashboard {
-            display: none;
-            height: 100vh;
-        }
-
-        .main {
-            padding: 20px;
-            overflow-y: auto;
-            height: 100vh;
-        }
-
-        /* ✅ FIX INPUT ISSUE */
-        #symptomsInput {
-            width: 100%;
-            padding: 14px;
-            font-size: 16px;
-            border-radius: 10px;
-            border: none;
-            outline: none;
-            margin-bottom: 10px;
-        }
-
-        .result {
-            margin-top: 15px;
-            font-size: 18px;
-            font-weight: 500;
-        }
-
-        .full {
-            width: 100%;
-        }
-    </style>
 </head>
 
 <body>
 
-    <!-- LOGIN -->
-    <div id="loginPage" class="center glass">
-        <h1 class="glow">🧠 AI Health Scanner</h1>
+    <!-- LOGIN PAGE -->
+    <div id="loginPage" class="center">
 
-        <div class="input-group">
-            <input id="email" placeholder="Email">
-            <input id="password" type="password" placeholder="Password">
+        <div class="glass login-box">
+
+            <h1 class="glow">
+                🧠 AI Health Scanner
+            </h1>
+
+            <br>
+
+            <div class="input-group">
+
+                <input type="email" id="email" placeholder="Enter Email">
+
+                <input type="password" id="password" placeholder="Enter Password">
+
+            </div>
+
+            <div class="btn-group">
+
+                <button class="primary" onclick="login()">
+                    Login
+                </button>
+
+                <button class="secondary" onclick="register()">
+                    Register
+                </button>
+
+            </div>
+
+            <br>
+
+            <p id="loginStatus"></p>
+
         </div>
 
-        <div class="btn-group">
-            <button class="primary" onclick="login()">Login</button>
-            <button class="secondary" onclick="register()">Register</button>
-        </div>
-
-        <p id="loginStatus"></p>
     </div>
 
     <!-- DASHBOARD -->
@@ -80,85 +67,156 @@
 
         <!-- SIDEBAR -->
         <div class="sidebar glass">
+
             <h2>⚡ AI Health</h2>
 
-            <button onclick="setMode('simple', event)">🟢 Simple</button>
-            <button onclick="setMode('heart', event)">❤️ Heart</button>
-            <button onclick="setMode('diabetes', event)">🩸 Diabetes</button>
+            <button onclick="setMode('simple', event)">
+                🟢 Simple
+            </button>
+
+            <button onclick="setMode('heart', event)">
+                ❤️ Heart
+            </button>
+
+            <button onclick="setMode('diabetes', event)">
+                🩸 Diabetes
+            </button>
 
             <hr>
 
-            <button onclick="openScan()">📸 Scan</button>
-            <button onclick="logout()">🚪 Logout</button>
+            <button onclick="openScan()">
+                📸 Scan
+            </button>
+
+            <button onclick="logout()">
+                🚪 Logout
+            </button>
+
         </div>
 
         <!-- MAIN -->
         <div class="main">
 
+            <!-- PROFILE -->
             <div id="profileBox" class="card"></div>
 
+            <!-- HISTORY -->
             <div class="card">
-                <h2>📊 History</h2>
+
+                <h2>📜 History</h2>
+
+                <br>
+
                 <div id="history"></div>
+
             </div>
 
+            <!-- ANALYTICS -->
             <div class="card">
-                <h2>📈 Analytics</h2>
-                <canvas id="analyticsChart"></canvas>
+
+                <h2>📊 Analytics</h2>
+
+                <br>
+
+                <div style="height:250px;">
+
+                    <canvas id="analyticsChart"></canvas>
+
+                </div>
+
             </div>
 
-            <!-- 🧠 AI PREDICTION -->
+            <!-- AI PREDICTION -->
             <div class="card">
+
                 <h2>🧠 AI Prediction</h2>
 
-                <!-- ✅ SIMPLE MODE -->
+                <br>
+
+                <!-- SIMPLE -->
                 <div id="simpleFields">
-                    <input id="symptomsInput" placeholder="Enter symptoms (e.g. fever cough headache)">
+
+                    <input id="symptomsInput" type="text" placeholder="Enter symptoms (fever cough headache)">
+
+                    <br>
 
                     <button class="primary full" onclick="runSimplePrediction()">
                         ⚡ Predict Disease
                     </button>
+
                 </div>
 
-                <!-- ❤️ HEART MODE -->
+                <!-- HEART -->
                 <div id="heartFields" class="hidden">
-                    <input placeholder="Age">
-                    <input placeholder="Cholesterol">
-                    <input placeholder="BP">
-                    <button class="primary full">❤️ Predict Heart Risk</button>
+
+                    <input id="heartAge" type="number" placeholder="Age">
+
+                    <br><br>
+
+                    <input id="heartBP" type="number" placeholder="Blood Pressure">
+
+                    <br><br>
+
+                    <input id="heartChol" type="number" placeholder="Cholesterol">
+
+                    <br><br>
+
+                    <button class="primary full" onclick="predictHeartRisk()">
+                        ❤️ Predict Heart Risk
+                    </button>
+
                 </div>
 
-                <!-- 🩸 DIABETES MODE -->
+                <!-- DIABETES -->
                 <div id="diabetesFields" class="hidden">
-                    <input placeholder="Glucose">
-                    <input placeholder="BMI">
-                    <input placeholder="Insulin">
-                    <button class="primary full">🩸 Predict Diabetes</button>
+
+                    <input id="glucose" type="number" placeholder="Glucose">
+
+                    <br><br>
+
+                    <input id="bmi" type="number" placeholder="BMI">
+
+                    <br><br>
+
+                    <input id="insulin" type="number" placeholder="Insulin">
+
+                    <br><br>
+
+                    <button class="primary full" onclick="predictDiabetes()">
+                        🩸 Predict Diabetes
+                    </button>
+
                 </div>
 
                 <!-- RESULT -->
                 <div id="result" class="result hidden"></div>
+
             </div>
 
         </div>
+
     </div>
 
-    <!-- CAMERA -->
+    <!-- CAMERA MODAL -->
     <div id="scanModal" class="hidden">
+
         <video id="camera" autoplay></video>
-        <button onclick="captureScan()">Capture</button>
-        <button onclick="closeScan()">Close</button>
+
+        <br><br>
+
+        <button class="primary" onclick="captureScan()">
+            Capture
+        </button>
+
+        <br><br>
+
+        <button class="secondary" onclick="closeScan()">
+            Close
+        </button>
+
     </div>
 
-    <!-- CHAT -->
-    <div id="chat-toggle" onclick="toggleChat()">💬</div>
-
-    <div id="chatbot" class="hidden">
-        <div id="chat-box"></div>
-        <input id="chat-input" placeholder="Ask something...">
-        <button onclick="sendMessage()">Send</button>
-    </div>
-
+    <!-- SCRIPT -->
     <script src="script.js"></script>
 
 </body>
