@@ -244,7 +244,11 @@ try:
 
     vectorizer = joblib.load("vectorizer.pkl")
 
-except:
+    print("✅ Models loaded successfully")
+
+except Exception as e:
+
+    print("❌ Model loading error:", e)
 
     model = None
     vectorizer = None
@@ -431,12 +435,7 @@ def get_analytics(
 
 @app.post("/predict")
 def predict(
-
-    data: PredictRequest,
-
-    user: User = Depends(get_current_user),
-
-    db: Session = Depends(get_db)
+    data: PredictRequest
 ):
 
     if not model or not vectorizer:
@@ -454,21 +453,7 @@ def predict(
 
     confidence = 0.85
 
-    db.add(
-
-        HealthHistory(
-
-            user_id=user.id,
-
-            prediction_type="symptom",
-
-            risk_level=prediction,
-
-            risk_score=confidence
-        )
-    )
-
-    db.commit()
+   
 
     return {
 
