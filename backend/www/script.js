@@ -45,7 +45,15 @@ async function loadHistory(){
  data.forEach(item=>{const card=document.createElement("div");card.className="history-card";const t=document.createElement("strong");t.textContent=item.type;const d=document.createElement("span");d.textContent=`${item.risk} • ${Math.round(item.score*100)}% score`;const date=document.createElement("small");date.textContent=new Date(item.date).toLocaleString();card.append(t,d,date);box.appendChild(card)})
 }
 async function loadTelemetry(){
- try{const d=await api("/health");$("diabetesModel").textContent=d.models?.diabetes||"unknown";$("heartModel").textContent=d.models?.heart||"unknown";$("aiModel").textContent=d.chat==="openai"?"OpenAI":"Safe local";$("systemStatus").textContent=`v${d.version} • models online`;}catch{$("systemStatus").textContent="API unavailable"}
+ try{
+  const d=await api("/health");
+  const dm=d.models?.diabetes,hm=d.models?.heart;
+  const label=m=>typeof m==="object"?`${m.status||"ready"}${m.accuracy!=null?" • "+Math.round(m.accuracy*100)+"% validation":""}`:String(m||"unknown");
+  $("diabetesModel").textContent=label(dm);
+  $("heartModel").textContent=label(hm);
+  $("aiModel").textContent=d.chat==="openai"?"OpenAI":"Safe local assistant";
+  $("systemStatus").textContent=`v${d.version} • live`;
+ }catch{$("systemStatus").textContent="API unavailable"}
 }
 function payloadForMode(){
  if(mode==="simple")return{age:+$("age").value,glucose:+$("glucose").value,bp:+$("bp").value,bmi:+$("bmi").value};
