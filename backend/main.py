@@ -147,213 +147,41 @@ class DiabetesRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=8)
 
 
-# Model runtime.
-# The checked-in artifacts are trusted repository files. If an artifact was serialized
-# with an incompatible sklearn version, we retrain deterministically from the bundled
-# datasets instead of serving a potentially incompatible model.
-import joblib
-import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, roc_auc_score
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.exceptions import InconsistentVersionWarning
+def local_health_assistant(message: str, history: list[dict[str, str]] | None = None) -> str:
+    q = message.strip().lower()
+    previous = " ".join(str(x.get("content","")) for x in (history or [])[-4:]).lower()
+    combined = q + " " + previous
 
-DIABETES_MODEL = None
-HEART_MODEL = None
-MODEL_STATUS = {"diabetes": "offline", "heart": "offline"}
-
-def train_runtime_models():
-    global DIABETES_MODEL, HEART_MODEL, MODEL_STATUS
-    status = {}
-
-    diabetes = pd.read_csv(BASE_DIR / "diabetes.csv")
-    Xd = diabetes.drop("Outcome", axis=1)
-    yd = diabetes["Outcome"]
-    Xtr, Xte, ytr, yte = train_test_split(Xd, yd, test_size=0.20, random_state=42, stratify=yd)
-    DIABETES_MODEL = RandomForestClassifier(n_estimators=300, max_depth=7, random_state=42, class_weight="balanced")
-    DIABETES_MODEL.fit(Xtr, ytr)
-    dp = DIABETES_MODEL.predict(Xte)
-    dprob = DIABETES_MODEL.predict_proba(Xte)[:, 1]
-    status["diabetes"] = {"status": "trained", "accuracy": round(float(accuracy_score(yte, dp)), 4), "roc_auc": round(float(roc_auc_score(yte, dprob)), 4)}
-
-    heart = pd.read_csv(BASE_DIR / "heart.csv", names=["age","sex","cp","trestbps","chol","fbs","restecg","thalach","exang","oldpeak","slope","ca","thal","target"])
-    heart.replace("?", pd.NA, inplace=True)
-    heart = heart.dropna().astype(float)
-    heart["target"] = heart["target"].apply(lambda x: 1 if x > 0 else 0)
-    features = ["age","sex","trestbps","chol","thalach","oldpeak"]
-    Xh, yh = heart[features], heart["target"]
-    Xtr, Xte, ytr, yte = train_test_split(Xh, yh, test_size=0.20, random_state=42, stratify=yh)
-    HEART_MODEL = Pipeline([
-        ("scaler", StandardScaler()),
-        ("rf", RandomForestClassifier(n_estimators=400, max_depth=8, min_samples_split=4, min_samples_leaf=2, class_weight="balanced", random_state=42))
-    ])
-    HEART_MODEL.fit(Xtr, ytr)
-    hp = HEART_MODEL.predict(Xte)
-    hprob = HEART_MODEL.predict_proba(Xte)[:, 1]
-    status["heart"] = {"status": "trained", "accuracy": round(float(accuracy_score(yte, hp)), 4), "roc_auc": round(float(roc_auc_score(yte, hprob)), 4)}
-    MODEL_STATUS = status
-
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", InconsistentVersionWarning)
-        DIABETES_MODEL = joblib.load(BASE_DIR / "diabetes_model.pkl")
-        HEART_MODEL = joblib.load(BASE_DIR / "heart_model.pkl")
-    MODEL_STATUS = {"diabetes": {"status": "artifact-ready"}, "heart": {"status": "artifact-ready"}}
-except Exception:
-    train_runtime_models()
-
-
-def classify(score: float) -> tuple[str, float]:
-    score = max(0.0, min(1.0, float(score)))
-    if score >= 0.70:
-        return "High", round(score, 3)
-    if score >= 0.40:
-        return "Moderate", round(score, 3)
-    return "Low", round(score, 3)
-
-
-def save_result(db: Session, user: User, prediction_type: str, risk_level: str, score: float) -> None:
-    db.add(HealthHistory(
-        user_id=user.id,
-        prediction_type=prediction_type,
-        risk_level=risk_level,
-        risk_score=score,
-    ))
-    db.commit()
-
-
-def diabetes_reasons(data: DiabetesRequest) -> list[str]:
-    reasons = []
-    if data.glucose >= 126:
-        reasons.append("elevated glucose")
-    elif data.glucose >= 100:
-        reasons.append("borderline glucose")
-    if data.bmi >= 30:
-        reasons.append("BMI in obesity range")
-    elif data.bmi >= 25:
-        reasons.append("BMI in overweight range")
-    if data.age >= 45:
-        reasons.append("age-related risk factor")
-    if data.blood_pressure >= 140:
-        reasons.append("elevated blood pressure")
-    if data.pregnancies >= 4:
-        reasons.append("higher pregnancy count")
-    if data.diabetes_pedigree >= 0.5:
-        reasons.append("higher family-history proxy")
-    return reasons
-
-
-def heart_reasons(data: HeartRequest) -> list[str]:
-    reasons = []
-    if data.age >= 55:
-        reasons.append("age-related risk factor")
-    elif data.age >= 45:
-        reasons.append("age-related risk factor")
-    if data.trestbps >= 140:
-        reasons.append("elevated resting blood pressure")
-    elif data.trestbps >= 130:
-        reasons.append("borderline blood pressure")
-    if data.chol >= 240:
-        reasons.append("high cholesterol")
-    elif data.chol >= 200:
-        reasons.append("borderline cholesterol")
-    if data.thalach < 100:
-        reasons.append("low maximum heart rate")
-    if data.oldpeak >= 2:
-        reasons.append("higher exercise-related ST depression")
-    elif data.oldpeak >= 1:
-        reasons.append("exercise-related ST depression")
-    return reasons
-
-
-def diabetes_screen(data: DiabetesRequest) -> tuple[str, float, list[str], str]:
-    reasons = diabetes_reasons(data)
-    method = "RandomForest model"
-
-    if DIABETES_MODEL is not None:
-        frame = pd.DataFrame([{
-            "Pregnancies": data.pregnancies,
-            "Glucose": data.glucose,
-            "BloodPressure": data.blood_pressure,
-            "SkinThickness": data.skin_thickness,
-            "Insulin": data.insulin,
-            "BMI": data.bmi,
-            "DiabetesPedigreeFunction": data.diabetes_pedigree,
-            "Age": data.age,
-        }])
-        try:
-            score = float(DIABETES_MODEL.predict_proba(frame)[0][1])
-            level, score = classify(score)
-            return level, score, reasons, method
-        except Exception:
-            pass
-
-    # Safe deterministic fallback if the trusted artifact cannot load.
-    score = 0.05
-    if data.glucose >= 126: score += 0.40
-    elif data.glucose >= 100: score += 0.20
-    if data.bmi >= 30: score += 0.20
-    elif data.bmi >= 25: score += 0.10
-    if data.age >= 45: score += 0.10
-    if data.blood_pressure >= 140: score += 0.10
-    if data.pregnancies >= 4: score += 0.05
-    if data.diabetes_pedigree >= 0.5: score += 0.05
-    level, score = classify(score)
-    return level, score, reasons, "deterministic screening fallback"
-
-
-def heart_screen(data: HeartRequest) -> tuple[str, float, list[str], str]:
-    reasons = heart_reasons(data)
-    method = "RandomForest + StandardScaler model"
-
-    if HEART_MODEL is not None:
-        frame = pd.DataFrame([{
-            "age": data.age,
-            "sex": data.sex,
-            "trestbps": data.trestbps,
-            "chol": data.chol,
-            "thalach": data.thalach,
-            "oldpeak": data.oldpeak,
-        }])
-        try:
-            score = float(HEART_MODEL.predict_proba(frame)[0][1])
-            level, score = classify(score)
-            return level, score, reasons, method
-        except Exception:
-            pass
-
-    score = 0.05
-    if data.age >= 55: score += 0.20
-    elif data.age >= 45: score += 0.10
-    if data.trestbps >= 140: score += 0.25
-    elif data.trestbps >= 130: score += 0.10
-    if data.chol >= 240: score += 0.20
-    elif data.chol >= 200: score += 0.10
-    if data.thalach < 100: score += 0.15
-    if data.oldpeak >= 2: score += 0.15
-    elif data.oldpeak >= 1: score += 0.05
-    if data.sex == 1: score += 0.05
-    level, score = classify(score)
-    return level, score, reasons, "deterministic screening fallback"
-
-
-def local_health_assistant(message: str) -> str:
-    text = message.lower()
-    if any(x in text for x in ["chest pain", "difficulty breathing", "can't breathe", "cannot breathe", "fainting"]):
-        return "Chest pain, severe breathing difficulty, fainting, or sudden severe symptoms can be emergencies. Please seek urgent medical care or contact local emergency services rather than relying on this app."
-    if "diabetes" in text or "blood sugar" in text or "glucose" in text:
-        return "Diabetes screening commonly considers glucose, BMI, age, blood pressure, and other factors. A screening score is not a diagnosis; persistent abnormal glucose should be discussed with a clinician."
-    if "heart" in text or "cholesterol" in text or "blood pressure" in text:
-        return "Heart-risk screening can consider age, blood pressure, cholesterol, heart rate, and exercise-related measurements. Results here are educational screening estimates, not a diagnosis."
-    if "fever" in text:
-        return "For fever, hydration and monitoring are important. Seek medical care for severe symptoms, persistent high fever, confusion, breathing difficulty, dehydration, or worsening condition."
-    if "bmi" in text:
-        return "BMI is a screening measure based on height and weight and does not by itself diagnose health conditions. It should be interpreted alongside other clinical information."
-    return "I can explain the screening fields, risk factors, and general health information. I cannot diagnose a condition or replace a qualified healthcare professional."
+    if any(x in q for x in ["hello", "hi", "hey", "who are you"]):
+        return "Hi — I’m your Nexus Health Assistant. I can explain screening inputs, risk factors, and general health information. What are you checking today?"
+    if any(x in q for x in ["thank", "thanks"]):
+        return "You’re welcome. If you share what you’re trying to understand, I can break it into simple steps."
+    if any(x in q for x in ["chest pain", "difficulty breathing", "can't breathe", "cannot breathe", "fainting", "passed out"]):
+        return "Chest pain, severe breathing difficulty, fainting, or sudden severe symptoms can need urgent assessment. Please seek urgent medical care or contact local emergency services rather than relying on this app."
+    if any(x in q for x in ["glucose", "blood sugar", "sugar level", "diabetes"]):
+        if any(x in q for x in ["129", "126", "100", "high", "elevated"]):
+            return "For glucose, the meaning depends on whether the measurement was fasting, after eating, or part of another test. A single reading does not establish a diagnosis. If you’re concerned about a repeated abnormal result, discuss it with a clinician."
+        return "Glucose is one input used in diabetes screening. Interpretation depends on context such as fasting status, other measurements, symptoms, and medical history. This app provides a screening estimate rather than a diagnosis."
+    if any(x in q for x in ["blood pressure", "bp", "systolic", "diastolic"]):
+        return "Blood pressure is usually interpreted using repeated measurements rather than one isolated reading. Systolic pressure is the upper number and diastolic is the lower number. If readings are repeatedly elevated, consider discussing them with a healthcare professional."
+    if any(x in q for x in ["heart", "cholesterol", "heart rate", "oldpeak"]):
+        return "The heart screen uses several measurements together, including age, resting blood pressure, cholesterol, maximum heart rate, and an exercise-related ECG feature. The combined model output is a screening estimate, not a diagnosis."
+    if "bmi" in q or "body mass" in q:
+        return "BMI is calculated from weight and height. It is a population-level screening measure and does not by itself diagnose health conditions. It is best interpreted alongside other clinical information."
+    if any(x in q for x in ["risk", "risk factors", "why", "result", "score"]):
+        return "Risk scores combine several inputs into an estimate. A higher score does not prove that a person has a disease, and a lower score does not rule one out. I can explain any factor shown in your latest screening artifact."
+    if any(x in q for x in ["fever", "temperature", "cold", "flu"]):
+        return "For fever or an acute illness, focus on hydration, rest, symptom monitoring, and appropriate medical advice. Seek prompt care for severe symptoms, breathing difficulty, confusion, significant dehydration, or worsening illness."
+    if any(x in q for x in ["diet", "food", "eat", "exercise", "workout"]):
+        return "General healthy habits often include a varied diet, regular physical activity appropriate for your condition, adequate sleep, and avoiding tobacco. Specific medical or dietary plans should be individualized with a qualified professional."
+    if any(x in q for x in ["fields", "inputs", "what do i enter", "how does this work"]):
+        return "Overview uses age, glucose, systolic blood pressure, and BMI. Heart uses age, sex, resting BP, cholesterol, maximum heart rate, and oldpeak. Diabetes uses the standard screening variables shown in the form. I can explain any one of them."
+    if any(x in combined for x in ["explain fields", "screening fields"]):
+        return "Sure. Start with the field you’re unsure about — glucose, blood pressure, BMI, cholesterol, heart rate, or another input — and I’ll explain what it represents and why it appears in the screen."
+    return "I can help with glucose, blood pressure, BMI, heart-risk inputs, diabetes-risk inputs, screening scores, or general health information. Tell me what you want to understand and I’ll answer that specific question."
 
 
 @app.get("/health")
