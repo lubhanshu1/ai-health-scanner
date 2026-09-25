@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="AI Health Scanner — intelligent health screening dashboard">
+<meta name="theme-color" content="#050816">
+<meta name="description" content="AI Health Scanner — live health screening workspace">
 <title>AI Health Scanner — Nexus</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,53 +36,58 @@
 
 <div id="dashboard" class="hidden">
   <aside class="sidebar">
-    <div class="brand-mini"><span>⚡</span> AI Health</div>
-    <div class="sidebar-label">WORKSPACE</div>
+    <div class="brand-mini"><span>⚡</span><div>AI Health<small>NEXUS WORKSPACE</small></div></div>
+    <div class="sidebar-label">SCREENING</div>
     <button type="button" data-mode="simple" class="mode-btn active">🟢 Overview</button>
     <button type="button" data-mode="heart" class="mode-btn">❤️ Heart</button>
     <button type="button" data-mode="diabetes" class="mode-btn">🩸 Diabetes</button>
     <div class="sidebar-label">TOOLS</div>
     <button type="button" id="refreshBtn" class="secondary">↻ Refresh live data</button>
-    <button type="button" id="downloadBtn" class="secondary">📄 Report artifact</button>
+    <button type="button" id="downloadBtn" class="secondary">▣ Report artifact</button>
     <div class="sidebar-spacer"></div>
     <div class="system-card"><span class="live-dot"></span><div><strong>System online</strong><small id="systemStatus">Checking models…</small></div></div>
-    <button type="button" id="logoutBtn" class="secondary">🚪 Logout</button>
+    <button type="button" id="logoutBtn" class="secondary">⇥ Logout</button>
   </aside>
 
   <main class="main">
     <header class="topbar">
-      <div><div class="eyebrow"><span class="live-dot"></span> LIVE CLINICAL-SCREENING ARTIFACTS</div>
-        <h1>Health Intelligence Dashboard</h1>
-        <p class="muted">Explainable screening estimates — never a medical diagnosis.</p>
+      <div>
+        <div class="eyebrow"><span class="live-dot"></span> LIVE HEALTH INTELLIGENCE</div>
+        <h1>Health Intelligence</h1>
+        <p class="muted">Screening estimates with live, auditable artifacts.</p>
       </div>
       <div class="profile"><span id="avatar" class="avatar">L</span><span id="profileBox">Loading…</span></div>
     </header>
 
     <section class="hero-strip">
-      <div><div class="hero-kicker">CURRENT MODE</div><strong id="modeTitle">Overview screening</strong><span id="lastUpdated">Awaiting first scan</span></div>
-      <div class="pulse"><span class="pulse-ring"></span><span>LIVE</span></div>
+      <div class="hero-copy">
+        <div class="hero-kicker">CURRENT WORKSPACE</div>
+        <strong id="modeTitle">Overview screening</strong>
+        <span id="lastUpdated">Ready for a new screening</span>
+      </div>
+      <div class="live-pill"><span class="pulse-ring"></span><b>LIVE</b><span id="engineBadge">READY</span></div>
     </section>
 
     <section class="stats">
-      <div class="stat"><span>Total scans</span><strong id="totalScans">0</strong><small>Saved to your history</small></div>
-      <div class="stat"><span>Low</span><strong id="lowScans">0</strong><small>Screening signals</small></div>
-      <div class="stat"><span>Moderate</span><strong id="moderateScans">0</strong><small>Needs attention</small></div>
-      <div class="stat"><span>High</span><strong id="highScans">0</strong><small>Discuss promptly</small></div>
+      <div class="stat"><div class="stat-icon">⌁</div><span>Total scans</span><strong id="totalScans">0</strong><small>Saved screening events</small></div>
+      <div class="stat"><div class="stat-icon">✓</div><span>Low</span><strong id="lowScans">0</strong><small>Lower signal</small></div>
+      <div class="stat"><div class="stat-icon">◐</div><span>Moderate</span><strong id="moderateScans">0</strong><small>Review context</small></div>
+      <div class="stat"><div class="stat-icon">!</div><span>High</span><strong id="highScans">0</strong><small>Discuss promptly</small></div>
     </section>
 
     <section class="grid">
       <div class="card scanner-card">
-        <div class="section-head"><div><div class="eyebrow">PREDICTIVE ENGINE</div><h2>Run live screening</h2></div><div id="engineBadge" class="badge">READY</div></div>
+        <div class="section-head"><div><div class="eyebrow">PREDICTIVE ENGINE</div><h2>Run live screening</h2><p class="card-subtitle">Enter the requested measurements and generate a traceable result.</p></div><span class="status-badge ready" id="engineState">READY</span></div>
         <form id="healthForm" novalidate>
           <div id="simpleFields" class="fields mode-fields">
-            <label>Age<input id="age" type="number" min="1" max="120" placeholder="Age"></label>
+            <label>Age<input id="age" type="number" min="1" max="120" placeholder="Years"></label>
             <label>Glucose<input id="glucose" type="number" min="20" max="600" placeholder="mg/dL"></label>
             <label>Systolic BP<input id="bp" type="number" min="40" max="300" placeholder="mmHg"></label>
             <label>BMI<input id="bmi" type="number" min="5" max="100" step="0.1" placeholder="kg/m²"></label>
           </div>
 
           <div id="heartFields" class="fields mode-fields hidden">
-            <label>Age<input id="h_age" type="number" min="1" max="120" placeholder="Age"></label>
+            <label>Age<input id="h_age" type="number" min="1" max="120" placeholder="Years"></label>
             <label>Sex<select id="sex"><option value="0">Female</option><option value="1">Male</option></select></label>
             <label>Resting BP<input id="trestbps" type="number" min="50" max="300" placeholder="mmHg"></label>
             <label>Cholesterol<input id="chol" type="number" min="50" max="700" placeholder="mg/dL"></label>
@@ -97,18 +103,19 @@
             <label>Insulin<input id="insulin" type="number" min="0" max="1000" placeholder="μU/mL"></label>
             <label>BMI<input id="d_bmi" type="number" min="5" max="100" step="0.1" placeholder="kg/m²"></label>
             <label>Pedigree function<input id="diabetes_pedigree" type="number" min="0" max="5" step="0.01" placeholder="0–5"></label>
-            <label>Age<input id="d_age" type="number" min="1" max="120" placeholder="Age"></label>
+            <label>Age<input id="d_age" type="number" min="1" max="120" placeholder="Years"></label>
           </div>
 
           <div class="action-row"><button id="scanBtn" type="submit">⚡ Run screening</button><button id="clearBtn" type="button" class="secondary">Clear</button></div>
         </form>
-        <div id="scanProgress" class="progress hidden"><div class="progress-bar"></div><span id="progressText">Preparing model…</span></div>
+        <div id="scanProgress" class="progress hidden"><div class="progress-track"><div class="progress-bar"></div></div><div class="progress-meta"><span id="progressText">Preparing model…</span><span id="progressStep">01 / 04</span></div></div>
         <div id="result" class="result hidden"></div>
       </div>
 
       <div class="card artifact-card">
         <div class="section-head"><div><div class="eyebrow">LIVE ARTIFACT</div><h2>Risk distribution</h2></div><span id="chartMode" class="muted">All scans</span></div>
-        <div class="chart-wrap"><canvas id="riskChart"></canvas><div id="chartEmpty" class="chart-empty">Run your first scan to generate a live artifact.</div></div>
+        <div class="chart-wrap"><canvas id="riskChart"></canvas><div id="chartCenter" class="chart-center"><strong id="chartTotal">0</strong><span>scans</span></div><div id="chartEmpty" class="chart-empty">Your live risk artifact will appear here after the first scan.</div></div>
+        <div class="artifact-foot"><span><i class="legend-dot low"></i>Low</span><span><i class="legend-dot moderate"></i>Moderate</span><span><i class="legend-dot high"></i>High</span></div>
       </div>
     </section>
 
@@ -118,15 +125,15 @@
         <div id="history"></div>
       </div>
       <div class="card">
-        <div class="section-head"><div><div class="eyebrow">MODEL TELEMETRY</div><h2>Engine status</h2></div></div>
+        <div class="section-head"><div><div class="eyebrow">MODEL TELEMETRY</div><h2>Engine status</h2></div><span class="status-badge live">LIVE</span></div>
         <div class="telemetry"><div><span>Diabetes model</span><strong id="diabetesModel">—</strong></div><div><span>Heart model</span><strong id="heartModel">—</strong></div><div><span>AI assistant</span><strong id="aiModel">—</strong></div></div>
-        <div class="notice">Model scores are estimates derived from the available training artifacts. They are not guaranteed to be correct for an individual patient.</div>
+        <div class="notice">Validation metrics describe model performance on the available evaluation data. They do not guarantee an individual outcome.</div>
       </div>
     </section>
 
     <section class="card">
-      <div class="section-head"><div><div class="eyebrow">VISION INPUT</div><h2>Medical image intake</h2></div><span class="badge">SAFE MODE</span></div>
-      <p class="muted">Upload JPEG, PNG, or WebP. The system validates and receives the image but will not fabricate a diagnosis without a validated medical vision model.</p>
+      <div class="section-head"><div><div class="eyebrow">VISION INPUT</div><h2>Medical image intake</h2></div><span class="status-badge safe">SAFE MODE</span></div>
+      <p class="muted">JPEG, PNG, or WebP intake is validated. No diagnosis is fabricated without a validated medical vision model.</p>
       <div class="upload-row"><input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp"><button type="button" id="imageBtn">Upload image</button></div>
       <p id="imageStatus" class="status"></p>
     </section>
@@ -134,11 +141,24 @@
 </div>
 
 <div id="chatbot" class="chat hidden">
-  <div class="chat-header"><span>🤖 AI Health Assistant</span><button type="button" id="closeChat">×</button></div>
-  <div id="chatBox"><div class="chat-ai">AI: Ready. Ask me about screening fields, risk factors, or general health information.</div></div>
-  <div class="chat-input"><input id="chatInput" maxlength="2000" placeholder="Ask a health-information question"><button type="button" id="sendChat">Send</button></div>
+  <div class="chat-header">
+    <div class="chat-title"><span class="bot-orb">✦</span><div><strong>AI Health Assistant</strong><small id="chatStatus">Context-aware health information</small></div></div>
+    <button type="button" id="closeChat" class="chat-close">×</button>
+  </div>
+  <div id="quickPrompts" class="quick-prompts">
+    <button type="button" data-prompt="Explain my screening fields">Explain fields</button>
+    <button type="button" data-prompt="What can affect blood glucose?">Glucose factors</button>
+    <button type="button" data-prompt="How should I interpret blood pressure?">Blood pressure</button>
+    <button type="button" data-prompt="What does BMI mean?">BMI</button>
+  </div>
+  <div id="chatBox" class="chat-box">
+    <div class="chat-welcome"><div class="welcome-icon">✦</div><strong>What would you like to understand?</strong><span>I can explain your screening inputs, risk factors, and general health information.</span></div>
+  </div>
+  <div id="typing" class="typing hidden"><span></span><span></span><span></span><em>Assistant is thinking</em></div>
+  <div class="chat-input"><input id="chatInput" maxlength="2000" placeholder="Ask a health-information question…"><button type="button" id="sendChat">Send</button></div>
+  <div class="chat-disclaimer">Educational information only • not a diagnosis</div>
 </div>
-<button type="button" id="chatToggle" class="chat-toggle">💬</button>
+<button type="button" id="chatToggle" class="chat-toggle" aria-label="Open AI Health Assistant">✦</button>
 <script src="/script.js"></script>
 </body>
 </html>
