@@ -3,115 +3,142 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="AI Health Scanner - personal health screening dashboard">
-<title>AI Health Scanner</title>
+<meta name="description" content="AI Health Scanner — intelligent health screening dashboard">
+<title>AI Health Scanner — Nexus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
+<div id="toast" class="toast hidden"></div>
+
 <div id="loginPage" class="center">
-  <div class="auth-card">
-    <div class="brand">🧠 AI Health Scanner</div>
-    <p class="muted">Private health screening dashboard</p>
-    <input id="authEmail" type="email" autocomplete="email" placeholder="Email">
-    <input id="authPassword" type="password" autocomplete="current-password" placeholder="Password">
-    <div class="row">
-      <button id="loginBtn">Login</button>
-      <button id="registerBtn" class="secondary">Register</button>
+  <div class="auth-shell">
+    <div class="auth-orbit"></div>
+    <div class="auth-card">
+      <div class="eyebrow"><span class="live-dot"></span> NEXUS HEALTH INTELLIGENCE</div>
+      <div class="brand">🧠 AI Health Scanner</div>
+      <p class="muted">Private, explainable health screening workspace</p>
+      <div class="auth-fields">
+        <label>Email<input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
+        <label>Password<input id="authPassword" type="password" autocomplete="current-password" placeholder="Minimum 8 characters"></label>
+      </div>
+      <div class="row"><button id="loginBtn">Login</button><button id="registerBtn" class="secondary">Create account</button></div>
+      <p id="loginStatus" class="status"></p>
+      <div class="trust-row"><span>🔐 JWT protected</span><span>⚡ Live analytics</span><span>🛡️ Screening only</span></div>
     </div>
-    <p id="loginStatus" class="status"></p>
   </div>
 </div>
 
 <div id="dashboard" class="hidden">
   <aside class="sidebar">
-    <h2>⚡ AI Health</h2>
-    <button data-mode="simple" class="mode-btn active">🟢 Overview</button>
-    <button data-mode="heart" class="mode-btn">❤️ Heart</button>
-    <button data-mode="diabetes" class="mode-btn">🩸 Diabetes</button>
-    <button id="logoutBtn" class="secondary">🚪 Logout</button>
+    <div class="brand-mini"><span>⚡</span> AI Health</div>
+    <div class="sidebar-label">WORKSPACE</div>
+    <button type="button" data-mode="simple" class="mode-btn active">🟢 Overview</button>
+    <button type="button" data-mode="heart" class="mode-btn">❤️ Heart</button>
+    <button type="button" data-mode="diabetes" class="mode-btn">🩸 Diabetes</button>
+    <div class="sidebar-label">TOOLS</div>
+    <button type="button" id="refreshBtn" class="secondary">↻ Refresh live data</button>
+    <button type="button" id="downloadBtn" class="secondary">📄 Report artifact</button>
+    <div class="sidebar-spacer"></div>
+    <div class="system-card"><span class="live-dot"></span><div><strong>System online</strong><small id="systemStatus">Checking models…</small></div></div>
+    <button type="button" id="logoutBtn" class="secondary">🚪 Logout</button>
   </aside>
 
   <main class="main">
     <header class="topbar">
-      <div>
-        <h1>Health Screening Dashboard</h1>
-        <p class="muted">Results are screening estimates, not medical diagnoses.</p>
+      <div><div class="eyebrow"><span class="live-dot"></span> LIVE CLINICAL-SCREENING ARTIFACTS</div>
+        <h1>Health Intelligence Dashboard</h1>
+        <p class="muted">Explainable screening estimates — never a medical diagnosis.</p>
       </div>
-      <div id="profileBox" class="profile"></div>
+      <div class="profile"><span class="avatar">L</span><span id="profileBox">Loading…</span></div>
     </header>
 
+    <section class="hero-strip">
+      <div><div class="hero-kicker">CURRENT MODE</div><strong id="modeTitle">Overview screening</strong><span id="lastUpdated">Awaiting first scan</span></div>
+      <div class="pulse"><span class="pulse-ring"></span><span>LIVE</span></div>
+    </section>
+
     <section class="stats">
-      <div class="stat"><span>Total scans</span><strong id="totalScans">0</strong></div>
-      <div class="stat"><span>Low</span><strong id="lowScans">0</strong></div>
-      <div class="stat"><span>Moderate</span><strong id="moderateScans">0</strong></div>
-      <div class="stat"><span>High</span><strong id="highScans">0</strong></div>
+      <div class="stat"><span>Total scans</span><strong id="totalScans">0</strong><small>Saved to your history</small></div>
+      <div class="stat"><span>Low</span><strong id="lowScans">0</strong><small>Screening signals</small></div>
+      <div class="stat"><span>Moderate</span><strong id="moderateScans">0</strong><small>Needs attention</small></div>
+      <div class="stat"><span>High</span><strong id="highScans">0</strong><small>Discuss promptly</small></div>
     </section>
 
     <section class="grid">
-      <div class="card">
-        <h2>Run screening</h2>
-        <form id="healthForm">
-          <div id="simpleFields" class="fields">
-            <input id="age" type="number" min="1" max="120" placeholder="Age" required>
-            <input id="glucose" type="number" min="20" max="600" placeholder="Glucose (mg/dL)" required>
-            <input id="bp" type="number" min="40" max="300" placeholder="Systolic BP" required>
-            <input id="bmi" type="number" min="5" max="100" step="0.1" placeholder="BMI" required>
+      <div class="card scanner-card">
+        <div class="section-head"><div><div class="eyebrow">PREDICTIVE ENGINE</div><h2>Run live screening</h2></div><div id="engineBadge" class="badge">READY</div></div>
+        <form id="healthForm" novalidate>
+          <div id="simpleFields" class="fields mode-fields">
+            <label>Age<input id="age" type="number" min="1" max="120" placeholder="Age"></label>
+            <label>Glucose<input id="glucose" type="number" min="20" max="600" placeholder="mg/dL"></label>
+            <label>Systolic BP<input id="bp" type="number" min="40" max="300" placeholder="mmHg"></label>
+            <label>BMI<input id="bmi" type="number" min="5" max="100" step="0.1" placeholder="kg/m²"></label>
           </div>
 
-          <div id="heartFields" class="fields hidden">
-            <input id="h_age" type="number" min="1" max="120" placeholder="Age" required>
-            <select id="sex"><option value="0">Female</option><option value="1">Male</option></select>
-            <input id="trestbps" type="number" min="50" max="300" placeholder="Resting BP" required>
-            <input id="chol" type="number" min="50" max="700" placeholder="Cholesterol" required>
-            <input id="thalach" type="number" min="40" max="250" placeholder="Maximum heart rate" required>
-            <input id="oldpeak" type="number" min="0" max="20" step="0.1" placeholder="Oldpeak" required>
+          <div id="heartFields" class="fields mode-fields hidden">
+            <label>Age<input id="h_age" type="number" min="1" max="120" placeholder="Age"></label>
+            <label>Sex<select id="sex"><option value="0">Female</option><option value="1">Male</option></select></label>
+            <label>Resting BP<input id="trestbps" type="number" min="50" max="300" placeholder="mmHg"></label>
+            <label>Cholesterol<input id="chol" type="number" min="50" max="700" placeholder="mg/dL"></label>
+            <label>Maximum heart rate<input id="thalach" type="number" min="40" max="250" placeholder="bpm"></label>
+            <label>Oldpeak<input id="oldpeak" type="number" min="0" max="20" step="0.1" placeholder="ST depression"></label>
           </div>
 
-          <div id="diabetesFields" class="fields hidden">
-            <input id="pregnancies" type="number" min="0" max="30" placeholder="Pregnancies" required>
-            <input id="d_glucose" type="number" min="20" max="600" placeholder="Glucose" required>
-            <input id="blood_pressure" type="number" min="30" max="250" placeholder="Blood pressure" required>
-            <input id="skin_thickness" type="number" min="0" max="150" placeholder="Skin thickness" required>
-            <input id="insulin" type="number" min="0" max="1000" placeholder="Insulin" required>
-            <input id="d_bmi" type="number" min="5" max="100" step="0.1" placeholder="BMI" required>
-            <input id="diabetes_pedigree" type="number" min="0" max="5" step="0.01" placeholder="Diabetes pedigree" required>
-            <input id="d_age" type="number" min="1" max="120" placeholder="Age" required>
+          <div id="diabetesFields" class="fields mode-fields hidden">
+            <label>Pregnancies<input id="pregnancies" type="number" min="0" max="30" placeholder="Count"></label>
+            <label>Glucose<input id="d_glucose" type="number" min="20" max="600" placeholder="mg/dL"></label>
+            <label>Blood pressure<input id="blood_pressure" type="number" min="30" max="250" placeholder="mmHg"></label>
+            <label>Skin thickness<input id="skin_thickness" type="number" min="0" max="150" placeholder="mm"></label>
+            <label>Insulin<input id="insulin" type="number" min="0" max="1000" placeholder="μU/mL"></label>
+            <label>BMI<input id="d_bmi" type="number" min="5" max="100" step="0.1" placeholder="kg/m²"></label>
+            <label>Pedigree function<input id="diabetes_pedigree" type="number" min="0" max="5" step="0.01" placeholder="0–5"></label>
+            <label>Age<input id="d_age" type="number" min="1" max="120" placeholder="Age"></label>
           </div>
-          <button type="submit">⚡ Run screening</button>
+
+          <div class="action-row"><button id="scanBtn" type="submit">⚡ Run screening</button><button id="clearBtn" type="button" class="secondary">Clear</button></div>
         </form>
+        <div id="scanProgress" class="progress hidden"><div class="progress-bar"></div><span id="progressText">Preparing model…</span></div>
         <div id="result" class="result hidden"></div>
-        <button id="downloadBtn" class="secondary">📄 Download report</button>
       </div>
 
+      <div class="card artifact-card">
+        <div class="section-head"><div><div class="eyebrow">LIVE ARTIFACT</div><h2>Risk distribution</h2></div><span id="chartMode" class="muted">All scans</span></div>
+        <div class="chart-wrap"><canvas id="riskChart"></canvas><div id="chartEmpty" class="chart-empty">Run your first scan to generate a live artifact.</div></div>
+      </div>
+    </section>
+
+    <section class="artifact-grid">
       <div class="card">
-        <h2>Risk distribution</h2>
-        <canvas id="riskChart"></canvas>
+        <div class="section-head"><div><div class="eyebrow">AUDIT TRAIL</div><h2>Recent screening events</h2></div><button type="button" id="historyRefresh" class="mini-btn">↻</button></div>
+        <div id="history"></div>
+      </div>
+      <div class="card">
+        <div class="section-head"><div><div class="eyebrow">MODEL TELEMETRY</div><h2>Engine status</h2></div></div>
+        <div class="telemetry"><div><span>Diabetes model</span><strong id="diabetesModel">—</strong></div><div><span>Heart model</span><strong id="heartModel">—</strong></div><div><span>AI assistant</span><strong id="aiModel">—</strong></div></div>
+        <div class="notice">Model scores are estimates derived from the available training artifacts. They are not guaranteed to be correct for an individual patient.</div>
       </div>
     </section>
 
     <section class="card">
-      <div class="section-head"><h2>Recent history</h2><button id="refreshBtn" class="secondary">Refresh</button></div>
-      <div id="history"></div>
-    </section>
-
-    <section class="card">
-      <h2>Image upload</h2>
-      <p class="muted">The current build validates and receives images but does not pretend to diagnose skin conditions without a validated medical vision model.</p>
-      <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp">
-      <button id="imageBtn">Upload image</button>
+      <div class="section-head"><div><div class="eyebrow">VISION INPUT</div><h2>Medical image intake</h2></div><span class="badge">SAFE MODE</span></div>
+      <p class="muted">Upload JPEG, PNG, or WebP. The system validates and receives the image but will not fabricate a diagnosis without a validated medical vision model.</p>
+      <div class="upload-row"><input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp"><button type="button" id="imageBtn">Upload image</button></div>
       <p id="imageStatus" class="status"></p>
     </section>
   </main>
 </div>
 
 <div id="chatbot" class="chat hidden">
-  <div class="chat-header">🤖 AI Assistant <button id="closeChat">×</button></div>
-  <div id="chatBox"></div>
-  <div class="chat-input"><input id="chatInput" maxlength="2000" placeholder="Ask a health-information question"><button id="sendChat">Send</button></div>
+  <div class="chat-header"><span>🤖 AI Health Assistant</span><button type="button" id="closeChat">×</button></div>
+  <div id="chatBox"><div class="chat-ai">AI: Ready. Ask me about screening fields, risk factors, or general health information.</div></div>
+  <div class="chat-input"><input id="chatInput" maxlength="2000" placeholder="Ask a health-information question"><button type="button" id="sendChat">Send</button></div>
 </div>
-<button id="chatToggle" class="chat-toggle">💬</button>
+<button type="button" id="chatToggle" class="chat-toggle">💬</button>
 <script src="/script.js"></script>
 </body>
 </html>
