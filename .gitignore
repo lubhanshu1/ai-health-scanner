@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite3
+.venv/
+venv/
+
+# Node
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# Secrets
+.env
+*.pem
+
+# IDE/build
+.vscode/
+.idea/
+dist/
+build/
+.DS_Store
+
+# Android generated/build
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
