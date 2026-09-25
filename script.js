@@ -1,664 +1,167 @@
-console.log("AI HEALTH SCANNER 🚀");
-
-const API_URL = "https://ai-health-scanner-1.onrender.com";
-
+const API = "";
 let mode = "simple";
-let analyticsChart = null;
-let stream = null;
+let riskChart = null;
+let lastResult = null;
 
-// ================= AUTH =================
-function getAuthHeaders() {
+const $ = id => document.getElementById(id);
+const token = () => localStorage.getItem("token");
+const headers = () => token() ? { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
 
-    const token = localStorage.getItem("token");
-
-    return {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-    };
-}
-
-// ================= INIT =================
-window.onload = () => {
-
-    const token = localStorage.getItem("token");
-
-    if (token) {
-
-        showDashboard();
-
-        loadProfile();
-        loadHistory();
-        loadAnalytics();
-
-    } else {
-
-        showLogin();
-    }
-
-    setMode("simple");
-};
-
-// ================= UI =================
-function showDashboard() {
-
-    document.getElementById("loginPage")
-        .style.display = "none";
-
-    document.getElementById("dashboard")
-        .style.display = "flex";
+async function api(path, options = {}) {
+  const res = await fetch(API + path, options);
+  let data = {};
+  try { data = await res.json(); } catch {}
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+    showLogin();
+    throw new Error("Session expired. Please log in again.");
+  }
+  if (!res.ok) throw new Error(data.detail || data.message || `Request failed (${res.status})`);
+  return data;
 }
 
 function showLogin() {
-
-    document.getElementById("loginPage")
-        .style.display = "flex";
-
-    document.getElementById("dashboard")
-        .style.display = "none";
+  $("loginPage").classList.remove("hidden");
+  $("dashboard").classList.add("hidden");
+}
+function showDashboard() {
+  $("loginPage").classList.add("hidden");
+  $("dashboard").classList.remove("hidden");
 }
 
-// ================= MODE =================
-function setMode(selected, event = null) {
-
-    mode = selected;
-
-    document.querySelectorAll(".sidebar button")
-        .forEach(btn => {
-            btn.classList.remove("active-btn");
-        });
-
-    if (event) {
-        event.target.classList.add("active-btn");
-    }
-
-    document.getElementById("simpleFields")
-        .classList.add("hidden");
-
-    document.getElementById("heartFields")
-        .classList.add("hidden");
-
-    document.getElementById("diabetesFields")
-        .classList.add("hidden");
-
-    document.getElementById(mode + "Fields")
-        .classList.remove("hidden");
+function setMode(next) {
+  mode = next;
+  document.querySelectorAll(".mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === next));
+  ["simpleFields","heartFields","diabetesFields"].forEach(id => $(id).classList.add("hidden"));
+  $(next === "simple" ? "simpleFields" : next === "heart" ? "heartFields" : "diabetesFields").classList.remove("hidden");
 }
 
-// ================= LOGIN =================
 async function login() {
-
-    const email =
-        document.getElementById("email").value;
-
-    const password =
-        document.getElementById("password").value;
-
-    showLoader("Logging in...");
-
-    try {
-
-        const res = await fetch(`${API_URL}/login`, {
-
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json"
-            },
-
-            body: JSON.stringify({
-                email,
-                password
-            })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-
-            localStorage.setItem(
-                "token",
-                data.access_token
-            );
-
-            showSuccess("Login successful 🚀");
-
-            setTimeout(() => {
-
-                showDashboard();
-
-                loadProfile();
-                loadHistory();
-                loadAnalytics();
-
-            }, 500);
-
-        } else {
-
-            showError(data.detail || "Login failed");
-        }
-
-    } catch (err) {
-
-        console.error(err);
-
-        showError("Server error");
-    }
+  try {
+    const data = await api("/login", { method:"POST", headers:headers(), body:JSON.stringify({email:$("authEmail").value.trim(), password:$("authPassword").value}) });
+    localStorage.setItem("token", data.access_token);
+    await boot();
+  } catch(e) { $("loginStatus").textContent = e.message; }
 }
 
-// ================= REGISTER =================
 async function register() {
-
-    const email =
-        document.getElementById("email").value;
-
-    const password =
-        document.getElementById("password").value;
-
-    showLoader("Registering...");
-
-    try {
-
-        const res = await fetch(`${API_URL}/register`, {
-
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json"
-            },
-
-            body: JSON.stringify({
-                email,
-                password
-            })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-
-            showSuccess(
-                "Registered successfully ✅"
-            );
-
-        } else {
-
-            showError(
-                data.detail || "Register failed"
-            );
-        }
-
-    } catch (err) {
-
-        console.error(err);
-
-        showError("Server error");
-    }
+  try {
+    await api("/register", { method:"POST", headers:headers(), body:JSON.stringify({email:$("authEmail").value.trim(), password:$("authPassword").value}) });
+    $("loginStatus").textContent = "Registered successfully. You can now log in.";
+  } catch(e) { $("loginStatus").textContent = e.message; }
 }
 
-// ================= LOGOUT =================
-function logout() {
-
-    localStorage.clear();
-
-    location.reload();
-}
-
-// ================= PROFILE =================
 async function loadProfile() {
-
-    try {
-
-        const res = await fetch(
-            `${API_URL}/profile`,
-            {
-                headers: getAuthHeaders()
-            }
-        );
-
-        const data = await res.json();
-
-        document.getElementById("profileBox")
-            .innerHTML = `
-                <h2>👤 ${data.email}</h2>
-            `;
-
-    } catch {
-
-        document.getElementById("profileBox")
-            .innerHTML =
-            "⚠️ Profile error";
-    }
+  const data = await api("/profile", {headers:{Authorization:`Bearer ${token()}`}});
+  $("profileBox").textContent = data.email;
 }
 
-// ================= HISTORY =================
-async function loadHistory() {
-
-    try {
-
-        const res = await fetch(
-            `${API_URL}/history`,
-            {
-                headers: getAuthHeaders()
-            }
-        );
-
-        const data = await res.json();
-
-        const history =
-            document.getElementById("history");
-
-        history.innerHTML = "";
-
-        if (!data.length) {
-
-            history.innerHTML =
-                "No history found";
-
-            return;
-        }
-
-        data.forEach(item => {
-
-            history.innerHTML += `
-                <div class="history-card">
-
-                    <h3>${item.result}</h3>
-
-                    <br>
-
-                    Confidence:
-                    ${(item.score * 100).toFixed(0)}%
-
-                </div>
-            `;
-        });
-
-    } catch {
-
-        document.getElementById("history")
-            .innerHTML =
-            "⚠️ History error";
-    }
-}
-
-// ================= ANALYTICS =================
 async function loadAnalytics() {
-
-    try {
-
-        const res = await fetch(
-            `${API_URL}/analytics`,
-            {
-                headers: getAuthHeaders()
-            }
-        );
-
-        const data = await res.json();
-
-        const ctx =
-            document.getElementById("analyticsChart");
-
-        if (!ctx) return;
-
-        if (analyticsChart) {
-            analyticsChart.destroy();
-        }
-
-        analyticsChart = new Chart(ctx, {
-
-            type: "bar",
-
-            data: {
-
-                labels: [
-                    "Total Scans",
-                    "High Risk"
-                ],
-
-                datasets: [{
-
-                    label: "AI Analytics",
-
-                    data: [
-                        data.total_scans || 0,
-                        data.high_risk_cases || 0
-                    ],
-
-                    borderWidth: 1
-                }]
-            },
-
-            options: {
-
-                responsive: true,
-
-                maintainAspectRatio: false
-            }
-        });
-
-    } catch (err) {
-
-        console.error(err);
-    }
+  const data = await api("/analytics", {headers:{Authorization:`Bearer ${token()}`}});
+  $("totalScans").textContent = data.total_scans;
+  $("lowScans").textContent = data.low;
+  $("moderateScans").textContent = data.moderate;
+  $("highScans").textContent = data.high;
+  if (riskChart) riskChart.destroy();
+  riskChart = new Chart($("riskChart"), {
+    type:"doughnut",
+    data:{labels:["Low","Moderate","High"],datasets:[{data:[data.low,data.moderate,data.high]}]},
+    options:{responsive:true,plugins:{legend:{labels:{color:"#fff"}}}}
+  });
 }
 
-// ================= SIMPLE PREDICTION =================
-async function runSimplePrediction() {
-
-    const symptoms =
-        document.getElementById("symptomsInput")
-            .value;
-
-    if (!symptoms) {
-
-        alert("Enter symptoms");
-
-        return;
-    }
-
-    const result =
-        document.getElementById("result");
-
-    result.classList.remove("hidden");
-
-    result.innerHTML = `
-        <div class="loader"></div>
-    `;
-
-    try {
-
-        const res = await fetch(
-            `${API_URL}/predict`,
-            {
-
-                method: "POST",
-
-                headers: getAuthHeaders(),
-
-                body: JSON.stringify({
-                    input: symptoms
-                })
-            }
-        );
-
-        const data = await res.json();
-
-        if (data.error) {
-
-            result.innerHTML = `
-                ⚠️ ${data.error}
-            `;
-
-            return;
-        }
-
-        result.innerHTML = `
-            <h2>🧠 Prediction Result</h2>
-
-            <br>
-
-            <h3>${data.disease}</h3>
-
-            <br>
-
-            Confidence:
-            ${Math.round(data.confidence * 100)}%
-        `;
-
-        loadHistory();
-        loadAnalytics();
-
-    } catch (err) {
-
-        console.error(err);
-
-        result.innerHTML =
-            "Prediction failed";
-    }
+async function loadHistory() {
+  const data = await api("/history", {headers:{Authorization:`Bearer ${token()}`}});
+  const box = $("history");
+  box.replaceChildren();
+  if (!data.length) {
+    const p = document.createElement("p"); p.className="muted"; p.textContent="No scans yet."; box.appendChild(p); return;
+  }
+  data.forEach(item => {
+    const card = document.createElement("div"); card.className="history-card";
+    const title = document.createElement("strong"); title.textContent = item.type;
+    const detail = document.createElement("span"); detail.textContent = ` • ${item.risk} • ${Math.round(item.score*100)}% screening score`;
+    const date = document.createElement("small"); date.textContent = new Date(item.date).toLocaleString();
+    card.append(title, detail, date); box.appendChild(card);
+  });
 }
 
-// ================= HEART PREDICTION =================
-async function predictHeartRisk() {
-
-    const age =
-        document.getElementById("heartAge").value;
-
-    const bp =
-        document.getElementById("heartBP").value;
-
-    const chol =
-        document.getElementById("heartChol").value;
-
-    if (!age || !bp || !chol) {
-
-        alert("Fill all heart fields");
-
-        return;
-    }
-
-    const result =
-        document.getElementById("result");
-
-    result.classList.remove("hidden");
-
-    result.innerHTML = `
-        <div class="loader"></div>
-    `;
-
-    try {
-
-        const res = await fetch(
-            `${API_URL}/predict-heart`,
-            {
-
-                method: "POST",
-
-                headers: getAuthHeaders(),
-
-                body: JSON.stringify({
-
-                    age: parseFloat(age),
-
-                    bp: parseFloat(bp),
-
-                    cholesterol: parseFloat(chol)
-
-                })
-            }
-        );
-
-        const data = await res.json();
-
-        result.innerHTML = `
-
-            <h2>❤️ Heart Analysis</h2>
-
-            <br>
-
-            <h3>${data.risk}</h3>
-
-            <br>
-
-            Confidence:
-            ${Math.round(data.confidence * 100)}%
-        `;
-
-        loadHistory();
-        loadAnalytics();
-
-    } catch (err) {
-
-        console.error(err);
-
-        result.innerHTML =
-            "Heart prediction failed";
-    }
+function payloadForMode() {
+  if (mode === "simple") return {age:+$("age").value, glucose:+$("glucose").value, bp:+$("bp").value, bmi:+$("bmi").value};
+  if (mode === "heart") return {age:+$("h_age").value, sex:+$("sex").value, trestbps:+$("trestbps").value, chol:+$("chol").value, thalach:+$("thalach").value, oldpeak:+$("oldpeak").value};
+  return {pregnancies:+$("pregnancies").value, glucose:+$("d_glucose").value, blood_pressure:+$("blood_pressure").value, skin_thickness:+$("skin_thickness").value, insulin:+$("insulin").value, bmi:+$("d_bmi").value, diabetes_pedigree:+$("diabetes_pedigree").value, age:+$("d_age").value};
 }
 
-// ================= DIABETES =================
-async function predictDiabetes() {
-
-    const glucose =
-        document.getElementById("glucose").value;
-
-    const bmi =
-        document.getElementById("bmi").value;
-
-    const insulin =
-        document.getElementById("insulin").value;
-
-    if (!glucose || !bmi || !insulin) {
-
-        alert("Fill all diabetes fields");
-
-        return;
-    }
-
-    const result =
-        document.getElementById("result");
-
-    result.classList.remove("hidden");
-
-    result.innerHTML = `
-        <div class="loader"></div>
-    `;
-
-    try {
-
-        const res = await fetch(
-            `${API_URL}/predict-diabetes`,
-            {
-
-                method: "POST",
-
-                headers: getAuthHeaders(),
-
-                body: JSON.stringify({
-
-                    glucose: parseFloat(glucose),
-
-                    bmi: parseFloat(bmi),
-
-                    insulin: parseFloat(insulin)
-
-                })
-            }
-        );
-
-        const data = await res.json();
-
-        result.innerHTML = `
-
-            <h2>🩸 Diabetes Analysis</h2>
-
-            <br>
-
-            <h3>${data.risk}</h3>
-
-            <br>
-
-            Confidence:
-            ${Math.round(data.confidence * 100)}%
-        `;
-
-        loadHistory();
-        loadAnalytics();
-
-    } catch (err) {
-
-        console.error(err);
-
-        result.innerHTML =
-            "Diabetes prediction failed";
-    }
+async function runScan(e) {
+  e.preventDefault();
+  $("result").classList.remove("hidden");
+  $("result").textContent = "Analyzing...";
+  const path = mode === "simple" ? "/predict-simple" : mode === "heart" ? "/heart-risk" : "/diabetes-risk";
+  try {
+    const data = await api(path, {method:"POST",headers:headers(),body:JSON.stringify(payloadForMode())});
+    lastResult = data;
+    const box = $("result"); box.replaceChildren();
+    const title = document.createElement("strong"); title.textContent = `${data.risk_level} risk`;
+    const score = document.createElement("span"); score.textContent = ` — ${Math.round(data.risk_score*100)}% screening score`;
+    const reason = document.createElement("p"); reason.textContent = data.reasons?.length ? "Factors: " + data.reasons.join(", ") : "No major screening factors detected.";
+    const note = document.createElement("small"); note.textContent = data.disclaimer;
+    box.append(title,score,reason,note);
+    await Promise.all([loadHistory(),loadAnalytics()]);
+  } catch(e) { $("result").textContent = e.message; }
 }
 
-// ================= CAMERA =================
-async function openScan() {
-
-    document.getElementById("scanModal")
-        .classList.remove("hidden");
-
-    try {
-
-        stream =
-            await navigator.mediaDevices
-                .getUserMedia({
-                    video: true
-                });
-
-        document.getElementById("camera")
-            .srcObject = stream;
-
-    } catch {
-
-        alert("Camera error");
-    }
+async function uploadImage() {
+  const file = $("imageInput").files[0];
+  if (!file) { $("imageStatus").textContent="Choose an image first."; return; }
+  try {
+    const form = new FormData(); form.append("image", file);
+    const res = await fetch("/scan-image",{method:"POST",headers:{Authorization:`Bearer ${token()}`},body:form});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Upload failed");
+    $("imageStatus").textContent = data.message;
+  } catch(e) { $("imageStatus").textContent=e.message; }
 }
 
-function closeScan() {
-
-    document.getElementById("scanModal")
-        .classList.add("hidden");
-
-    if (stream) {
-
-        stream.getTracks()
-            .forEach(track => track.stop());
-    }
+async function sendChat() {
+  const input = $("chatInput"); const text = input.value.trim(); if (!text) return;
+  appendChat("You", text);
+  input.value = "";
+  try {
+    const data = await api("/chat",{method:"POST",headers:headers(),body:JSON.stringify({message:text})});
+    appendChat("AI", data.reply);
+  } catch(e) { appendChat("AI", e.message); }
+}
+function appendChat(who,text) {
+  const el=document.createElement("div"); el.className=who==="You"?"chat-user":"chat-ai"; el.textContent=`${who}: ${text}`; $("chatBox").appendChild(el); $("chatBox").scrollTop=$("chatBox").scrollHeight;
 }
 
-// ================= IMAGE SCAN =================
-async function captureScan() {
-
-    const result =
-        document.getElementById("result");
-
-    result.classList.remove("hidden");
-
-    result.innerHTML = `
-        <h2>📸 Scan Complete</h2>
-
-        <br>
-
-        Possible Skin Allergy
-
-        <br><br>
-
-        Confidence: 82%
-    `;
-
-    closeScan();
-
-    loadHistory();
-    loadAnalytics();
+function downloadPDF() {
+  if (!lastResult) { alert("Run a screening first."); return; }
+  const {jsPDF}=window.jspdf; const doc=new jsPDF();
+  doc.setFontSize(20); doc.text("AI Health Scanner Report",20,20);
+  doc.setFontSize(12); doc.text(`Risk level: ${lastResult.risk_level}`,20,40);
+  doc.text(`Screening score: ${Math.round(lastResult.risk_score*100)}%`,20,50);
+  doc.text("This is a screening result, not a diagnosis.",20,70);
+  doc.text(`Generated: ${new Date().toLocaleString()}`,20,85);
+  doc.save("AI_Health_Report.pdf");
 }
 
-// ================= LOADER =================
-function showLoader(text) {
-
-    document.getElementById("loginStatus")
-        .innerText = text;
+async function boot() {
+  if (!token()) return showLogin();
+  try { showDashboard(); setMode("simple"); await Promise.all([loadProfile(),loadHistory(),loadAnalytics()]); }
+  catch { localStorage.removeItem("token"); showLogin(); }
 }
 
-// ================= SUCCESS =================
-function showSuccess(text) {
-
-    const el =
-        document.getElementById("loginStatus");
-
-    el.innerText = text;
-
-    el.style.color = "lightgreen";
-}
-
-// ================= ERROR =================
-function showError(text) {
-
-    const el =
-        document.getElementById("loginStatus");
-
-    el.innerText = text;
-
-    el.style.color = "red";
-}
+$("loginBtn").onclick=login;
+$("registerBtn").onclick=register;
+$("logoutBtn").onclick=()=>{localStorage.removeItem("token");showLogin();};
+document.querySelectorAll(".mode-btn").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+$("healthForm").onsubmit=runScan;
+$("refreshBtn").onclick=()=>Promise.all([loadHistory(),loadAnalytics()]);
+$("downloadBtn").onclick=downloadPDF;
+$("imageBtn").onclick=uploadImage;
+$("chatToggle").onclick=()=>$("chatbot").classList.toggle("hidden");
+$("closeChat").onclick=()=>$("chatbot").classList.add("hidden");
+$("sendChat").onclick=sendChat;
+$("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter")sendChat();});
+boot();
