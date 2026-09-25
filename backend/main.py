@@ -1,6 +1,5 @@
-import base64
-import binascii
 import os
+import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Generator
@@ -20,12 +19,7 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BASE_DIR / "www"
-
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    # Development-only fallback. Production must provide SECRET_KEY.
-    SECRET_KEY = "dev-only-change-me"
-
+SECRET_KEY = os.getenv("SECRET_KEY") or "dev-only-change-me"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'users.db'}")
@@ -35,7 +29,7 @@ engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=Tr
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
-app = FastAPI(title="AI Health Scanner", version="2.0.0")
+app = FastAPI(title="AI Health Scanner", version="3.0.0")
 security = HTTPBearer(auto_error=True)
 
 allowed_origins = [x.strip() for x in os.getenv("ALLOWED_ORIGINS", "*").split(",") if x.strip()]
@@ -155,8 +149,26 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
 
+# The model artifacts are local, trusted repository files. We load them once at startup.
+# The pinned sklearn version in requirements.txt matches the training environment used
+# for the checked-in artifacts.
+try:
+    import joblib
+    import pandas as pd
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        DIABETES_MODEL = joblib.load(BASE_DIR / "diabetes_model.pkl")
+        HEART_MODEL = joblib.load(BASE_DIR / "heart_model.pkl")
+    MODEL_STATUS = {"diabetes": "ready", "heart": "ready"}
+except Exception as exc:
+    DIABETES_MODEL = None
+    HEART_MODEL = None
+    MODEL_STATUS = {"diabetes": "fallback", "heart": "fallback", "error": str(exc)}
+
+
 def classify(score: float) -> tuple[str, float]:
-    score = max(0.0, min(1.0, score))
+    score = max(0.0, min(1.0, float(score)))
     if score >= 0.70:
         return "High", round(score, 3)
     if score >= 0.40:
@@ -174,59 +186,154 @@ def save_result(db: Session, user: User, prediction_type: str, risk_level: str, 
     db.commit()
 
 
-def diabetes_screen(data: DiabetesRequest) -> tuple[str, float, list[str]]:
-    score = 0.05
+def diabetes_reasons(data: DiabetesRequest) -> list[str]:
     reasons = []
     if data.glucose >= 126:
-        score += 0.40; reasons.append("elevated glucose")
+        reasons.append("elevated glucose")
     elif data.glucose >= 100:
-        score += 0.20; reasons.append("borderline glucose")
+        reasons.append("borderline glucose")
     if data.bmi >= 30:
-        score += 0.20; reasons.append("BMI in obesity range")
+        reasons.append("BMI in obesity range")
     elif data.bmi >= 25:
-        score += 0.10; reasons.append("BMI in overweight range")
+        reasons.append("BMI in overweight range")
     if data.age >= 45:
-        score += 0.10; reasons.append("age-related risk factor")
+        reasons.append("age-related risk factor")
     if data.blood_pressure >= 140:
-        score += 0.10; reasons.append("elevated blood pressure")
+        reasons.append("elevated blood pressure")
     if data.pregnancies >= 4:
-        score += 0.05; reasons.append("higher pregnancy count")
+        reasons.append("higher pregnancy count")
     if data.diabetes_pedigree >= 0.5:
-        score += 0.05; reasons.append("higher family-history proxy")
-    level, score = classify(score)
-    return level, score, reasons
+        reasons.append("higher family-history proxy")
+    return reasons
 
 
-def heart_screen(data: HeartRequest) -> tuple[str, float, list[str]]:
-    score = 0.05
+def heart_reasons(data: HeartRequest) -> list[str]:
     reasons = []
     if data.age >= 55:
-        score += 0.20; reasons.append("age-related risk factor")
+        reasons.append("age-related risk factor")
     elif data.age >= 45:
-        score += 0.10; reasons.append("age-related risk factor")
+        reasons.append("age-related risk factor")
     if data.trestbps >= 140:
-        score += 0.25; reasons.append("elevated resting blood pressure")
+        reasons.append("elevated resting blood pressure")
     elif data.trestbps >= 130:
-        score += 0.10; reasons.append("borderline blood pressure")
+        reasons.append("borderline blood pressure")
     if data.chol >= 240:
-        score += 0.20; reasons.append("high cholesterol")
+        reasons.append("high cholesterol")
     elif data.chol >= 200:
-        score += 0.10; reasons.append("borderline cholesterol")
+        reasons.append("borderline cholesterol")
     if data.thalach < 100:
-        score += 0.15; reasons.append("low maximum heart rate")
+        reasons.append("low maximum heart rate")
     if data.oldpeak >= 2:
-        score += 0.15; reasons.append("higher exercise-related ST depression")
+        reasons.append("higher exercise-related ST depression")
     elif data.oldpeak >= 1:
-        score += 0.05; reasons.append("exercise-related ST depression")
-    if data.sex == 1:
-        score += 0.05
+        reasons.append("exercise-related ST depression")
+    return reasons
+
+
+def diabetes_screen(data: DiabetesRequest) -> tuple[str, float, list[str], str]:
+    reasons = diabetes_reasons(data)
+    method = "RandomForest model"
+
+    if DIABETES_MODEL is not None:
+        frame = pd.DataFrame([{
+            "Pregnancies": data.pregnancies,
+            "Glucose": data.glucose,
+            "BloodPressure": data.blood_pressure,
+            "SkinThickness": data.skin_thickness,
+            "Insulin": data.insulin,
+            "BMI": data.bmi,
+            "DiabetesPedigreeFunction": data.diabetes_pedigree,
+            "Age": data.age,
+        }])
+        try:
+            score = float(DIABETES_MODEL.predict_proba(frame)[0][1])
+            level, score = classify(score)
+            return level, score, reasons, method
+        except Exception:
+            pass
+
+    # Safe deterministic fallback if the trusted artifact cannot load.
+    score = 0.05
+    if data.glucose >= 126: score += 0.40
+    elif data.glucose >= 100: score += 0.20
+    if data.bmi >= 30: score += 0.20
+    elif data.bmi >= 25: score += 0.10
+    if data.age >= 45: score += 0.10
+    if data.blood_pressure >= 140: score += 0.10
+    if data.pregnancies >= 4: score += 0.05
+    if data.diabetes_pedigree >= 0.5: score += 0.05
     level, score = classify(score)
-    return level, score, reasons
+    return level, score, reasons, "deterministic screening fallback"
+
+
+def heart_screen(data: HeartRequest) -> tuple[str, float, list[str], str]:
+    reasons = heart_reasons(data)
+    method = "RandomForest + StandardScaler model"
+
+    if HEART_MODEL is not None:
+        frame = pd.DataFrame([{
+            "age": data.age,
+            "sex": data.sex,
+            "trestbps": data.trestbps,
+            "chol": data.chol,
+            "thalach": data.thalach,
+            "oldpeak": data.oldpeak,
+        }])
+        try:
+            score = float(HEART_MODEL.predict_proba(frame)[0][1])
+            level, score = classify(score)
+            return level, score, reasons, method
+        except Exception:
+            pass
+
+    score = 0.05
+    if data.age >= 55: score += 0.20
+    elif data.age >= 45: score += 0.10
+    if data.trestbps >= 140: score += 0.25
+    elif data.trestbps >= 130: score += 0.10
+    if data.chol >= 240: score += 0.20
+    elif data.chol >= 200: score += 0.10
+    if data.thalach < 100: score += 0.15
+    if data.oldpeak >= 2: score += 0.15
+    elif data.oldpeak >= 1: score += 0.05
+    if data.sex == 1: score += 0.05
+    level, score = classify(score)
+    return level, score, reasons, "deterministic screening fallback"
+
+
+def local_health_assistant(message: str) -> str:
+    text = message.lower()
+    if any(x in text for x in ["chest pain", "difficulty breathing", "can't breathe", "cannot breathe", "fainting"]):
+        return "Chest pain, severe breathing difficulty, fainting, or sudden severe symptoms can be emergencies. Please seek urgent medical care or contact local emergency services rather than relying on this app."
+    if "diabetes" in text or "blood sugar" in text or "glucose" in text:
+        return "Diabetes screening commonly considers glucose, BMI, age, blood pressure, and other factors. A screening score is not a diagnosis; persistent abnormal glucose should be discussed with a clinician."
+    if "heart" in text or "cholesterol" in text or "blood pressure" in text:
+        return "Heart-risk screening can consider age, blood pressure, cholesterol, heart rate, and exercise-related measurements. Results here are educational screening estimates, not a diagnosis."
+    if "fever" in text:
+        return "For fever, hydration and monitoring are important. Seek medical care for severe symptoms, persistent high fever, confusion, breathing difficulty, dehydration, or worsening condition."
+    if "bmi" in text:
+        return "BMI is a screening measure based on height and weight and does not by itself diagnose health conditions. It should be interpreted alongside other clinical information."
+    return "I can explain the screening fields, risk factors, and general health information. I cannot diagnose a condition or replace a qualified healthcare professional."
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": app.version, "time": datetime.utcnow().isoformat()}
+    return {
+        "status": "ok",
+        "version": app.version,
+        "models": MODEL_STATUS,
+        "chat": "openai" if os.getenv("OPENAI_API_KEY") else "local-safe-assistant",
+        "time": datetime.utcnow().isoformat(),
+    }
+
+
+@app.get("/model-info")
+def model_info():
+    return {
+        "version": app.version,
+        "models": MODEL_STATUS,
+        "note": "Accuracy is dataset-dependent; no responsible medical model can be guaranteed to be 100% accurate on unseen patients.",
+    }
 
 
 @app.post("/register")
@@ -303,12 +410,12 @@ def predict(data: SimpleRequest, user: User = Depends(get_current_user), db: Ses
     if data.age >= 45:
         score += 0.10; reasons.append("age-related factor")
     risk, score = classify(score)
-    save_result(db, user, "Simple", risk, score)
+    save_result(db, user, "Overview", risk, score)
     return {
         "risk_level": risk,
         "risk_score": score,
         "reasons": reasons,
-        "method": "rule-based screening",
+        "method": "deterministic screening",
         "disclaimer": "Screening only; not a diagnosis.",
     }
 
@@ -316,13 +423,13 @@ def predict(data: SimpleRequest, user: User = Depends(get_current_user), db: Ses
 @app.post("/predict-heart")
 @app.post("/heart-risk")
 def predict_heart(data: HeartRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    risk, score, reasons = heart_screen(data)
+    risk, score, reasons, method = heart_screen(data)
     save_result(db, user, "Heart", risk, score)
     return {
         "risk_level": risk,
         "risk_score": score,
         "reasons": reasons,
-        "method": "rule-based screening",
+        "method": method,
         "disclaimer": "Screening only; not a diagnosis.",
     }
 
@@ -330,23 +437,19 @@ def predict_heart(data: HeartRequest, user: User = Depends(get_current_user), db
 @app.post("/predict-diabetes")
 @app.post("/diabetes-risk")
 def predict_diabetes(data: DiabetesRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    risk, score, reasons = diabetes_screen(data)
+    risk, score, reasons, method = diabetes_screen(data)
     save_result(db, user, "Diabetes", risk, score)
     return {
         "risk_level": risk,
         "risk_score": score,
         "reasons": reasons,
-        "method": "rule-based screening",
+        "method": method,
         "disclaimer": "Screening only; not a diagnosis.",
     }
 
 
 @app.post("/scan-image")
-async def scan_image(
-    image: UploadFile = File(...),
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+async def scan_image(image: UploadFile = File(...), user: User = Depends(get_current_user)):
     if image.content_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(status_code=415, detail="Only JPEG, PNG, and WebP images are supported")
     content = await image.read()
@@ -354,15 +457,13 @@ async def scan_image(
         raise HTTPException(status_code=413, detail="Image must be 5 MB or smaller")
     if not content:
         raise HTTPException(status_code=400, detail="Empty image")
-
-    # No diagnostic vision model is bundled with this repository. Do not fabricate a disease.
     return {
         "status": "received",
         "filename": image.filename,
         "size_bytes": len(content),
         "prediction": None,
         "confidence": None,
-        "message": "Image received successfully. A validated medical image model is not installed, so no diagnosis is returned.",
+        "message": "Image received. No validated medical vision model is installed, so the app will not fabricate a diagnosis.",
     }
 
 
@@ -370,10 +471,8 @@ async def scan_image(
 def chat(data: ChatRequest, user: User = Depends(get_current_user)):
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return {
-            "reply": "I can help explain health information, but the AI chat service is not configured yet. For urgent or severe symptoms, contact a qualified medical professional.",
-            "configured": False,
-        }
+        return {"reply": local_health_assistant(data.message), "configured": False, "mode": "local-safe-assistant"}
+
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
@@ -381,18 +480,15 @@ def chat(data: ChatRequest, user: User = Depends(get_current_user)):
             model=os.getenv("OPENAI_MODEL", "gpt-5.6-luna"),
             instructions=(
                 "You are a health-information assistant, not a doctor. "
-                "Give general educational information, do not diagnose, do not invent test results, "
-                "and recommend professional care for urgent or concerning symptoms."
+                "Give concise general educational information. Never diagnose, never invent test results, "
+                "and advise professional care for urgent or concerning symptoms."
             ),
             input=data.message,
             max_output_tokens=500,
         )
-        return {"reply": response.output_text, "configured": True}
+        return {"reply": response.output_text, "configured": True, "mode": "openai"}
     except Exception:
-        return {
-            "reply": "The AI assistant is temporarily unavailable. Please try again later or contact a healthcare professional for urgent concerns.",
-            "configured": True,
-        }
+        return {"reply": local_health_assistant(data.message), "configured": True, "mode": "safe-fallback"}
 
 
 @app.get("/")
@@ -402,7 +498,6 @@ def serve_app():
 
 @app.get("/{path:path}")
 def static_files(path: str):
-    # Keep API routes above this catch-all. Only serve known files.
     candidate = (FRONTEND_DIR / path).resolve()
     if candidate.is_file() and str(candidate).startswith(str(FRONTEND_DIR.resolve())):
         return FileResponse(candidate)
