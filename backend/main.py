@@ -149,22 +149,62 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
 
-# The model artifacts are local, trusted repository files. We load them once at startup.
-# The pinned sklearn version in requirements.txt matches the training environment used
-# for the checked-in artifacts.
-try:
-    import joblib
-    import pandas as pd
+# Model runtime.
+# The checked-in artifacts are trusted repository files. If an artifact was serialized
+# with an incompatible sklearn version, we retrain deterministically from the bundled
+# datasets instead of serving a potentially incompatible model.
+import joblib
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.exceptions import InconsistentVersionWarning
 
+DIABETES_MODEL = None
+HEART_MODEL = None
+MODEL_STATUS = {"diabetes": "offline", "heart": "offline"}
+
+def train_runtime_models():
+    global DIABETES_MODEL, HEART_MODEL, MODEL_STATUS
+    status = {}
+
+    diabetes = pd.read_csv(BASE_DIR / "diabetes.csv")
+    Xd = diabetes.drop("Outcome", axis=1)
+    yd = diabetes["Outcome"]
+    Xtr, Xte, ytr, yte = train_test_split(Xd, yd, test_size=0.20, random_state=42, stratify=yd)
+    DIABETES_MODEL = RandomForestClassifier(n_estimators=300, max_depth=7, random_state=42, class_weight="balanced")
+    DIABETES_MODEL.fit(Xtr, ytr)
+    dp = DIABETES_MODEL.predict(Xte)
+    dprob = DIABETES_MODEL.predict_proba(Xte)[:, 1]
+    status["diabetes"] = {"status": "trained", "accuracy": round(float(accuracy_score(yte, dp)), 4), "roc_auc": round(float(roc_auc_score(yte, dprob)), 4)}
+
+    heart = pd.read_csv(BASE_DIR / "heart.csv", names=["age","sex","cp","trestbps","chol","fbs","restecg","thalach","exang","oldpeak","slope","ca","thal","target"])
+    heart.replace("?", pd.NA, inplace=True)
+    heart = heart.dropna().astype(float)
+    heart["target"] = heart["target"].apply(lambda x: 1 if x > 0 else 0)
+    features = ["age","sex","trestbps","chol","thalach","oldpeak"]
+    Xh, yh = heart[features], heart["target"]
+    Xtr, Xte, ytr, yte = train_test_split(Xh, yh, test_size=0.20, random_state=42, stratify=yh)
+    HEART_MODEL = Pipeline([
+        ("scaler", StandardScaler()),
+        ("rf", RandomForestClassifier(n_estimators=400, max_depth=8, min_samples_split=4, min_samples_leaf=2, class_weight="balanced", random_state=42))
+    ])
+    HEART_MODEL.fit(Xtr, ytr)
+    hp = HEART_MODEL.predict(Xte)
+    hprob = HEART_MODEL.predict_proba(Xte)[:, 1]
+    status["heart"] = {"status": "trained", "accuracy": round(float(accuracy_score(yte, hp)), 4), "roc_auc": round(float(roc_auc_score(yte, hprob)), 4)}
+    MODEL_STATUS = status
+
+try:
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("error", InconsistentVersionWarning)
         DIABETES_MODEL = joblib.load(BASE_DIR / "diabetes_model.pkl")
         HEART_MODEL = joblib.load(BASE_DIR / "heart_model.pkl")
-    MODEL_STATUS = {"diabetes": "ready", "heart": "ready"}
-except Exception as exc:
-    DIABETES_MODEL = None
-    HEART_MODEL = None
-    MODEL_STATUS = {"diabetes": "fallback", "heart": "fallback", "error": str(exc)}
+    MODEL_STATUS = {"diabetes": {"status": "artifact-ready"}, "heart": {"status": "artifact-ready"}}
+except Exception:
+    train_runtime_models()
 
 
 def classify(score: float) -> tuple[str, float]:
