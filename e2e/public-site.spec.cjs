@@ -13,6 +13,6 @@ test('public dashboard loads and validates empty login', async ({ page }) => {
   await page.locator('#loginBtn').click();
   await expect(page.locator('#loginStatus')).toContainText(/enter your email and password/i);
   await page.locator('#registerBtn').click();
-  await expect(page.locator('#loginStatus')).toContainText(/enter your email and password/i);
+  await expect(page.locator('#loginStatus')).toContainText(/enter an email and password first/i);
   expect(errors).toEqual([]);
 });
