@@ -14,6 +14,8 @@ from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, St
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 from passlib.context import CryptContext
 from jose import JWTError, jwt
+import joblib
+import pandas as pd
 
 load_dotenv()
 
@@ -182,6 +184,110 @@ def local_health_assistant(message: str, history: list[dict[str, str]] | None = 
     if any(x in combined for x in ["explain fields", "screening fields"]):
         return "Sure. Start with the field you’re unsure about — glucose, blood pressure, BMI, cholesterol, heart rate, or another input — and I’ll explain what it represents and why it appears in the screen."
     return "I can help with glucose, blood pressure, BMI, heart-risk inputs, diabetes-risk inputs, screening scores, or general health information. Tell me what you want to understand and I’ll answer that specific question."
+
+
+# Load bundled models once at startup. A missing/incompatible model must not break API startup.
+def _load_model(filename: str):
+    model_path = BASE_DIR / filename
+    try:
+        return joblib.load(model_path) if model_path.is_file() else None
+    except Exception as exc:
+        warnings.warn(f"Could not load {filename}: {exc}")
+        return None
+
+
+DIABETES_MODEL = _load_model("diabetes_model.pkl")
+HEART_MODEL = _load_model("heart_model.pkl")
+MODEL_STATUS = {
+    "diabetes": {"status": "ready" if DIABETES_MODEL is not None else "fallback", "model": "RandomForestClassifier" if DIABETES_MODEL is not None else "rule-based screening"},
+    "heart": {"status": "ready" if HEART_MODEL is not None else "fallback", "model": "heart screening pipeline" if HEART_MODEL is not None else "rule-based screening"},
+}
+
+
+def classify(score: float) -> tuple[str, float]:
+    score = max(0.0, min(1.0, float(score)))
+    if score < 0.33:
+        return "Low", score
+    if score < 0.66:
+        return "Moderate", score
+    return "High", score
+
+
+def save_result(db: Session, user: User, prediction_type: str, risk: str, score: float) -> None:
+    db.add(HealthHistory(
+        user_id=user.id,
+        prediction_type=prediction_type,
+        risk_level=risk,
+        risk_score=max(0.0, min(1.0, float(score))),
+    ))
+    db.commit()
+
+
+def heart_screen(data: HeartRequest) -> tuple[str, float, list[str], str]:
+    reasons = []
+    if HEART_MODEL is not None:
+        features = pd.DataFrame([{
+            "age": data.age,
+            "sex": data.sex,
+            "trestbps": data.trestbps,
+            "chol": data.chol,
+            "thalach": data.thalach,
+            "oldpeak": data.oldpeak,
+        }], columns=["age", "sex", "trestbps", "chol", "thalach", "oldpeak"])
+        try:
+            probabilities = HEART_MODEL.predict_proba(features)[0]
+            classes = list(getattr(HEART_MODEL, "classes_", [0, 1]))
+            score = float(probabilities[classes.index(1)]) if 1 in classes else float(probabilities[-1])
+            method = "trained heart model"
+        except Exception as exc:
+            warnings.warn(f"Heart model prediction failed; using fallback: {exc}")
+            score = 0.10
+            method = "rule-based fallback (model unavailable)"
+    else:
+        score = 0.10
+        method = "rule-based fallback (model unavailable)"
+    if data.age >= 55: score += 0.12; reasons.append("age-related factor")
+    if data.trestbps >= 140: score += 0.12; reasons.append("elevated resting blood pressure")
+    if data.chol >= 240: score += 0.10; reasons.append("elevated cholesterol")
+    if data.thalach < 100: score += 0.10; reasons.append("lower maximum heart rate")
+    if data.oldpeak >= 2: score += 0.12; reasons.append("exercise-related ECG factor")
+    if HEART_MODEL is None or method.startswith("rule-based"):
+        score = min(score, 1.0)
+    risk, score = classify(score)
+    if not reasons: reasons.append("No additional rule-based factors flagged")
+    return risk, score, reasons, method
+
+
+def diabetes_screen(data: DiabetesRequest) -> tuple[str, float, list[str], str]:
+    reasons = []
+    if DIABETES_MODEL is not None:
+        columns = ["Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI", "DiabetesPedigreeFunction", "Age"]
+        features = pd.DataFrame([[
+            data.pregnancies, data.glucose, data.blood_pressure, data.skin_thickness,
+            data.insulin, data.bmi, data.diabetes_pedigree, data.age
+        ]], columns=columns)
+        try:
+            probabilities = DIABETES_MODEL.predict_proba(features)[0]
+            classes = list(getattr(DIABETES_MODEL, "classes_", [0, 1]))
+            score = float(probabilities[classes.index(1)]) if 1 in classes else float(probabilities[-1])
+            method = "trained diabetes model"
+        except Exception as exc:
+            warnings.warn(f"Diabetes model prediction failed; using fallback: {exc}")
+            score = 0.10
+            method = "rule-based fallback (model unavailable)"
+    else:
+        score = 0.10
+        method = "rule-based fallback (model unavailable)"
+    if data.glucose >= 126: score += 0.25; reasons.append("elevated glucose")
+    elif data.glucose >= 100: score += 0.12; reasons.append("borderline glucose")
+    if data.bmi >= 30: score += 0.10; reasons.append("high BMI")
+    if data.age >= 45: score += 0.08; reasons.append("age-related factor")
+    if data.pregnancies >= 4: score += 0.05; reasons.append("pregnancy history factor")
+    if DIABETES_MODEL is None or method.startswith("rule-based"):
+        score = min(score, 1.0)
+    risk, score = classify(score)
+    if not reasons: reasons.append("No additional rule-based factors flagged")
+    return risk, score, reasons, method
 
 
 @app.get("/health")
