@@ -1,4 +1,4 @@
-const API="";
+const API=String(window.HEALTH_API_URL||"https://ai-health-backend-g329.onrender.com").replace(/\/$/,"");
 let mode="simple",riskChart=null,lastResult=null;
 const $=id=>document.getElementById(id);
 const token=()=>localStorage.getItem("token");
