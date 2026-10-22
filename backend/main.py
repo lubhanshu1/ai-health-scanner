@@ -11,18 +11,28 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, create_engine, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 from passlib.context import CryptContext
 from jose import JWTError, jwt
+import joblib
+import pandas as pd
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BASE_DIR / "www"
-SECRET_KEY = os.getenv("SECRET_KEY") or "dev-only-change-me"
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    if os.getenv("RENDER", "").lower() == "true" or os.getenv("ENVIRONMENT", "").lower() == "production":
+        raise RuntimeError("SECRET_KEY must be configured in production.")
+    SECRET_KEY = "dev-only-change-me"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'users.db'}")
+# Render and some hosted Postgres providers still expose the legacy postgres:// scheme.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
@@ -30,7 +40,7 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
 app = FastAPI(title="AI Health Scanner", version="3.0.0")
-security = HTTPBearer(auto_error=True)
+security = HTTPBearer(auto_error=False)
 
 allowed_origins = [x.strip() for x in os.getenv("ALLOWED_ORIGINS", "*").split(",") if x.strip()]
 app.add_middleware(
@@ -93,9 +103,11 @@ def create_token(user_id: int, email: str) -> str:
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload.get("sub", "0"))
@@ -184,6 +196,116 @@ def local_health_assistant(message: str, history: list[dict[str, str]] | None = 
     return "I can help with glucose, blood pressure, BMI, heart-risk inputs, diabetes-risk inputs, screening scores, or general health information. Tell me what you want to understand and I’ll answer that specific question."
 
 
+# Load bundled models once at startup. A missing/incompatible model must not break API startup.
+def _load_model(filename: str):
+    model_path = BASE_DIR / filename
+    try:
+        return joblib.load(model_path) if model_path.is_file() else None
+    except Exception as exc:
+        warnings.warn(f"Could not load {filename}: {exc}")
+        return None
+
+
+DIABETES_MODEL = _load_model("diabetes_model.pkl")
+HEART_MODEL = _load_model("heart_model.pkl")
+MODEL_STATUS = {
+    "diabetes": {"status": "ready" if DIABETES_MODEL is not None else "fallback", "model": "RandomForestClassifier" if DIABETES_MODEL is not None else "rule-based screening"},
+    "heart": {"status": "ready" if HEART_MODEL is not None else "fallback", "model": "heart screening pipeline" if HEART_MODEL is not None else "rule-based screening"},
+}
+
+
+def classify(score: float) -> tuple[str, float]:
+    score = max(0.0, min(1.0, float(score)))
+    if score < 0.33:
+        return "Low", score
+    if score < 0.66:
+        return "Moderate", score
+    return "High", score
+
+
+def save_result(db: Session, user: User, prediction_type: str, risk: str, score: float) -> None:
+    db.add(HealthHistory(
+        user_id=user.id,
+        prediction_type=prediction_type,
+        risk_level=risk,
+        risk_score=max(0.0, min(1.0, float(score))),
+    ))
+    db.commit()
+
+
+def heart_screen(data: HeartRequest) -> tuple[str, float, list[str], str]:
+    reasons = []
+    fallback = HEART_MODEL is None
+    method = "rule-based fallback (model unavailable)"
+    score = 0.10
+    if HEART_MODEL is not None:
+        features = pd.DataFrame([{
+            "age": data.age, "sex": data.sex, "trestbps": data.trestbps,
+            "chol": data.chol, "thalach": data.thalach, "oldpeak": data.oldpeak,
+        }], columns=["age", "sex", "trestbps", "chol", "thalach", "oldpeak"])
+        try:
+            probabilities = HEART_MODEL.predict_proba(features)[0]
+            classes = list(getattr(HEART_MODEL, "classes_", [0, 1]))
+            score = float(probabilities[classes.index(1)]) if 1 in classes else float(probabilities[-1])
+            method = "trained heart model"
+        except Exception as exc:
+            warnings.warn(f"Heart model prediction failed; using fallback: {exc}")
+            fallback = True
+    if data.age >= 55: reasons.append("age-related factor")
+    if data.trestbps >= 140: reasons.append("elevated resting blood pressure")
+    if data.chol >= 240: reasons.append("elevated cholesterol")
+    if data.thalach < 100: reasons.append("lower maximum heart rate")
+    if data.oldpeak >= 2: reasons.append("exercise-related ECG factor")
+    if fallback:
+        score = 0.10
+        if data.age >= 55: score += 0.12
+        if data.trestbps >= 140: score += 0.12
+        if data.chol >= 240: score += 0.10
+        if data.thalach < 100: score += 0.10
+        if data.oldpeak >= 2: score += 0.12
+        method = "rule-based fallback (model unavailable)"
+    risk, score = classify(score)
+    if not reasons: reasons.append("No additional screening factors flagged")
+    return risk, score, reasons, method
+
+
+def diabetes_screen(data: DiabetesRequest) -> tuple[str, float, list[str], str]:
+    reasons = []
+    fallback = DIABETES_MODEL is None
+    method = "rule-based fallback (model unavailable)"
+    score = 0.10
+    if DIABETES_MODEL is not None:
+        columns = ["Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI", "DiabetesPedigreeFunction", "Age"]
+        features = pd.DataFrame([[
+            data.pregnancies, data.glucose, data.blood_pressure, data.skin_thickness,
+            data.insulin, data.bmi, data.diabetes_pedigree, data.age
+        ]], columns=columns)
+        try:
+            probabilities = DIABETES_MODEL.predict_proba(features)[0]
+            classes = list(getattr(DIABETES_MODEL, "classes_", [0, 1]))
+            score = float(probabilities[classes.index(1)]) if 1 in classes else float(probabilities[-1])
+            method = "trained diabetes model"
+        except Exception as exc:
+            warnings.warn(f"Diabetes model prediction failed; using fallback: {exc}")
+            fallback = True
+    if data.glucose >= 126: reasons.append("elevated glucose")
+    elif data.glucose >= 100: reasons.append("borderline glucose")
+    if data.bmi >= 30: reasons.append("high BMI")
+    if data.age >= 45: reasons.append("age-related factor")
+    if data.pregnancies >= 4: reasons.append("pregnancy history factor")
+    if fallback:
+        score = 0.10
+        if data.glucose >= 126: score += 0.25
+        elif data.glucose >= 100: score += 0.12
+        if data.bmi >= 30: score += 0.10
+        if data.age >= 45: score += 0.08
+        if data.pregnancies >= 4: score += 0.05
+        method = "rule-based fallback (model unavailable)"
+    risk, score = classify(score)
+    if not reasons: reasons.append("No additional screening factors flagged")
+    return risk, score, reasons, method
+
+
 @app.get("/health")
 def health():
     return {
@@ -211,7 +333,11 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Email already exists")
     user = User(email=email, password=hash_password(data.password))
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Email already exists")
     return {"message": "User registered successfully"}
 
 
@@ -320,7 +446,7 @@ def predict_diabetes(data: DiabetesRequest, user: User = Depends(get_current_use
 async def scan_image(image: UploadFile = File(...), user: User = Depends(get_current_user)):
     if image.content_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(status_code=415, detail="Only JPEG, PNG, and WebP images are supported")
-    content = await image.read()
+    content = await image.read(5 * 1024 * 1024 + 1)
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Image must be 5 MB or smaller")
     if not content:
@@ -339,24 +465,32 @@ async def scan_image(image: UploadFile = File(...), user: User = Depends(get_cur
 def chat(data: ChatRequest, user: User = Depends(get_current_user)):
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return {"reply": local_health_assistant(data.message), "configured": False, "mode": "local-safe-assistant"}
+        return {"reply": local_health_assistant(data.message, data.history), "configured": False, "mode": "local-safe-assistant"}
 
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
+        history_items = data.history[-8:]
+        # The web client includes the current user message in history; avoid sending it twice.
+        if history_items and history_items[-1].get("role") == "user" and history_items[-1].get("content") == data.message:
+            history_items = history_items[:-1]
         response = client.responses.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-5.6-luna"),
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             instructions=(
                 "You are a health-information assistant, not a doctor. "
                 "Give concise general educational information. Never diagnose, never invent test results, "
                 "and advise professional care for urgent or concerning symptoms."
             ),
-            input=data.message,
+            input=[
+                {"role": item.get("role"), "content": item.get("content", "")}
+                for item in history_items[-7:]
+                if item.get("role") in {"user", "assistant"} and item.get("content")
+            ] + [{"role": "user", "content": data.message}],
             max_output_tokens=500,
         )
         return {"reply": response.output_text, "configured": True, "mode": "openai"}
     except Exception:
-        return {"reply": local_health_assistant(data.message), "configured": True, "mode": "safe-fallback"}
+        return {"reply": local_health_assistant(data.message, data.history), "configured": True, "mode": "safe-fallback"}
 
 
 @app.get("/")
@@ -367,6 +501,6 @@ def serve_app():
 @app.get("/{path:path}")
 def static_files(path: str):
     candidate = (FRONTEND_DIR / path).resolve()
-    if candidate.is_file() and str(candidate).startswith(str(FRONTEND_DIR.resolve())):
+    if candidate.is_file() and candidate.is_relative_to(FRONTEND_DIR.resolve()):
         return FileResponse(candidate)
     return FileResponse(FRONTEND_DIR / "index.html")
