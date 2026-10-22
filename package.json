@@ -3,5 +3,6 @@
     "@capacitor/android": "^8.3.0",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0"
-  }
+  },
+  "description": "AI Health Scanner mobile wrapper powered by Capacitor"
 }
