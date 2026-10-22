@@ -308,11 +308,15 @@ def diabetes_screen(data: DiabetesRequest) -> tuple[str, float, list[str], str]:
 
 @app.get("/health")
 def health():
+    # Report storage mode without exposing connection strings or credentials.
+    storage_backend = engine.dialect.name
     return {
         "status": "ok",
         "version": app.version,
         "models": MODEL_STATUS,
         "chat": "openai" if os.getenv("OPENAI_API_KEY") else "local-safe-assistant",
+        "storage_backend": storage_backend,
+        "persistent_storage": storage_backend in {"postgresql", "postgres"},
         "time": datetime.utcnow().isoformat(),
     }
 
