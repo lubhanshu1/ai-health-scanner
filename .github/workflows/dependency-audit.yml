@@ -1,0 +1,20 @@
+name: Dependency audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/dependency-audit.yml
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm audit --json > audit.json || true
+      - run: node -e "const a=require('./audit.json'); console.log(JSON.stringify(a.metadata?.vulnerabilities || {})); for(const [n,v] of Object.entries(a.vulnerabilities||{})) console.log(n, v.severity, JSON.stringify(v.fixAvailable), v.via.map(x=>typeof x==='string'?x:x.title).join('; '))"
