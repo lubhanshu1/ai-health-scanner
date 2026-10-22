@@ -1,0 +1,32 @@
+name: Public browser E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - script.js
+      - style.css
+      - e2e/**
+      - .github/workflows/public-e2e.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false @playwright/test@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - name: Test public site in Chromium
+        env:
+          E2E_BASE_URL: https://ai-health-scanner-web.onrender.com
+        run: npx playwright test e2e/public-site.spec.cjs --reporter=line
