@@ -20,6 +20,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt pytest
+      - name: Check frontend JavaScript syntax
+        run: |
+          node --check script.js
+          node --check backend/www/script.js
       - name: Run API regression tests
         working-directory: backend
         env:
