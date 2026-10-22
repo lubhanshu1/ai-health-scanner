@@ -225,14 +225,13 @@ def save_result(db: Session, user: User, prediction_type: str, risk: str, score:
 
 def heart_screen(data: HeartRequest) -> tuple[str, float, list[str], str]:
     reasons = []
+    fallback = HEART_MODEL is None
+    method = "rule-based fallback (model unavailable)"
+    score = 0.10
     if HEART_MODEL is not None:
         features = pd.DataFrame([{
-            "age": data.age,
-            "sex": data.sex,
-            "trestbps": data.trestbps,
-            "chol": data.chol,
-            "thalach": data.thalach,
-            "oldpeak": data.oldpeak,
+            "age": data.age, "sex": data.sex, "trestbps": data.trestbps,
+            "chol": data.chol, "thalach": data.thalach, "oldpeak": data.oldpeak,
         }], columns=["age", "sex", "trestbps", "chol", "thalach", "oldpeak"])
         try:
             probabilities = HEART_MODEL.predict_proba(features)[0]
@@ -241,25 +240,30 @@ def heart_screen(data: HeartRequest) -> tuple[str, float, list[str], str]:
             method = "trained heart model"
         except Exception as exc:
             warnings.warn(f"Heart model prediction failed; using fallback: {exc}")
-            score = 0.10
-            method = "rule-based fallback (model unavailable)"
-    else:
+            fallback = True
+    if data.age >= 55: reasons.append("age-related factor")
+    if data.trestbps >= 140: reasons.append("elevated resting blood pressure")
+    if data.chol >= 240: reasons.append("elevated cholesterol")
+    if data.thalach < 100: reasons.append("lower maximum heart rate")
+    if data.oldpeak >= 2: reasons.append("exercise-related ECG factor")
+    if fallback:
         score = 0.10
+        if data.age >= 55: score += 0.12
+        if data.trestbps >= 140: score += 0.12
+        if data.chol >= 240: score += 0.10
+        if data.thalach < 100: score += 0.10
+        if data.oldpeak >= 2: score += 0.12
         method = "rule-based fallback (model unavailable)"
-    if data.age >= 55: score += 0.12; reasons.append("age-related factor")
-    if data.trestbps >= 140: score += 0.12; reasons.append("elevated resting blood pressure")
-    if data.chol >= 240: score += 0.10; reasons.append("elevated cholesterol")
-    if data.thalach < 100: score += 0.10; reasons.append("lower maximum heart rate")
-    if data.oldpeak >= 2: score += 0.12; reasons.append("exercise-related ECG factor")
-    if HEART_MODEL is None or method.startswith("rule-based"):
-        score = min(score, 1.0)
     risk, score = classify(score)
-    if not reasons: reasons.append("No additional rule-based factors flagged")
+    if not reasons: reasons.append("No additional screening factors flagged")
     return risk, score, reasons, method
 
 
 def diabetes_screen(data: DiabetesRequest) -> tuple[str, float, list[str], str]:
     reasons = []
+    fallback = DIABETES_MODEL is None
+    method = "rule-based fallback (model unavailable)"
+    score = 0.10
     if DIABETES_MODEL is not None:
         columns = ["Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI", "DiabetesPedigreeFunction", "Age"]
         features = pd.DataFrame([[
@@ -273,20 +277,22 @@ def diabetes_screen(data: DiabetesRequest) -> tuple[str, float, list[str], str]:
             method = "trained diabetes model"
         except Exception as exc:
             warnings.warn(f"Diabetes model prediction failed; using fallback: {exc}")
-            score = 0.10
-            method = "rule-based fallback (model unavailable)"
-    else:
+            fallback = True
+    if data.glucose >= 126: reasons.append("elevated glucose")
+    elif data.glucose >= 100: reasons.append("borderline glucose")
+    if data.bmi >= 30: reasons.append("high BMI")
+    if data.age >= 45: reasons.append("age-related factor")
+    if data.pregnancies >= 4: reasons.append("pregnancy history factor")
+    if fallback:
         score = 0.10
+        if data.glucose >= 126: score += 0.25
+        elif data.glucose >= 100: score += 0.12
+        if data.bmi >= 30: score += 0.10
+        if data.age >= 45: score += 0.08
+        if data.pregnancies >= 4: score += 0.05
         method = "rule-based fallback (model unavailable)"
-    if data.glucose >= 126: score += 0.25; reasons.append("elevated glucose")
-    elif data.glucose >= 100: score += 0.12; reasons.append("borderline glucose")
-    if data.bmi >= 30: score += 0.10; reasons.append("high BMI")
-    if data.age >= 45: score += 0.08; reasons.append("age-related factor")
-    if data.pregnancies >= 4: score += 0.05; reasons.append("pregnancy history factor")
-    if DIABETES_MODEL is None or method.startswith("rule-based"):
-        score = min(score, 1.0)
     risk, score = classify(score)
-    if not reasons: reasons.append("No additional rule-based factors flagged")
+    if not reasons: reasons.append("No additional screening factors flagged")
     return risk, score, reasons, method
 
 
