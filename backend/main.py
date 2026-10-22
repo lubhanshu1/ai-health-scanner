@@ -36,7 +36,7 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
 app = FastAPI(title="AI Health Scanner", version="3.0.0")
-security = HTTPBearer(auto_error=True)
+security = HTTPBearer(auto_error=False)
 
 allowed_origins = [x.strip() for x in os.getenv("ALLOWED_ORIGINS", "*").split(",") if x.strip()]
 app.add_middleware(
@@ -99,9 +99,11 @@ def create_token(user_id: int, email: str) -> str:
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload.get("sub", "0"))
@@ -440,7 +442,7 @@ def predict_diabetes(data: DiabetesRequest, user: User = Depends(get_current_use
 async def scan_image(image: UploadFile = File(...), user: User = Depends(get_current_user)):
     if image.content_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(status_code=415, detail="Only JPEG, PNG, and WebP images are supported")
-    content = await image.read()
+    content = await image.read(5 * 1024 * 1024 + 1)
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Image must be 5 MB or smaller")
     if not content:
@@ -464,8 +466,12 @@ def chat(data: ChatRequest, user: User = Depends(get_current_user)):
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
+        history_items = data.history[-8:]
+        # The web client includes the current user message in history; avoid sending it twice.
+        if history_items and history_items[-1].get("role") == "user" and history_items[-1].get("content") == data.message:
+            history_items = history_items[:-1]
         response = client.responses.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-5.6-luna"),
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             instructions=(
                 "You are a health-information assistant, not a doctor. "
                 "Give concise general educational information. Never diagnose, never invent test results, "
@@ -473,7 +479,7 @@ def chat(data: ChatRequest, user: User = Depends(get_current_user)):
             ),
             input=[
                 {"role": item.get("role"), "content": item.get("content", "")}
-                for item in data.history[-7:]
+                for item in history_items[-7:]
                 if item.get("role") in {"user", "assistant"} and item.get("content")
             ] + [{"role": "user", "content": data.message}],
             max_output_tokens=500,
@@ -491,6 +497,6 @@ def serve_app():
 @app.get("/{path:path}")
 def static_files(path: str):
     candidate = (FRONTEND_DIR / path).resolve()
-    if candidate.is_file() and str(candidate).startswith(str(FRONTEND_DIR.resolve())):
+    if candidate.is_file() and candidate.is_relative_to(FRONTEND_DIR.resolve()):
         return FileResponse(candidate)
     return FileResponse(FRONTEND_DIR / "index.html")
