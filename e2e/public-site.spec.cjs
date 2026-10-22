@@ -9,6 +9,7 @@ test('public dashboard loads and validates empty login', async ({ page }) => {
   const apiHealth = await page.evaluate(async () => { const response = await fetch('https://ai-health-backend-g329.onrender.com/health'); return { status: response.status, body: await response.json() }; });
   expect(apiHealth.status).toBe(200);
   expect(apiHealth.body.status).toBe('ok');
+  console.log('PUBLIC API STORAGE CHECK:', JSON.stringify({ backend: apiHealth.body.storage_backend, persistent: apiHealth.body.persistent_storage }));
   await page.locator('#loginBtn').click();
   await expect(page.locator('#loginStatus')).toContainText(/enter your email and password/i);
   await page.locator('#registerBtn').click();
