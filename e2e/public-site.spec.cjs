@@ -6,6 +6,9 @@ test('public dashboard loads and validates empty login', async ({ page }) => {
   await page.goto(process.env.E2E_BASE_URL || 'https://ai-health-scanner-web.onrender.com', { waitUntil: 'domcontentloaded', timeout: 90000 });
   await expect(page).toHaveTitle(/AI Health Scanner/i);
   await expect(page.locator('#loginPage')).toBeVisible();
+  const apiHealth = await page.evaluate(async () => { const response = await fetch('https://ai-health-backend-g329.onrender.com/health'); return { status: response.status, body: await response.json() }; });
+  expect(apiHealth.status).toBe(200);
+  expect(apiHealth.body.status).toBe('ok');
   await page.locator('#loginBtn').click();
   await expect(page.locator('#loginStatus')).toContainText(/enter your email and password/i);
   await page.locator('#registerBtn').click();
