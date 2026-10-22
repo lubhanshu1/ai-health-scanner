@@ -68,20 +68,39 @@ def test_registration_login_screening_and_history():
     assert result["risk_level"] in {"Low", "Moderate", "High"}
     assert 0 <= result["risk_score"] <= 1
 
+    heart = client.post(
+        "/heart-risk",
+        headers=headers,
+        json={"age": 35, "sex": 1, "trestbps": 120, "chol": 190, "thalach": 160, "oldpeak": 0.2},
+    )
+    assert heart.status_code == 200
+    assert heart.json()["risk_level"] in {"Low", "Moderate", "High"}
+
+    diabetes = client.post(
+        "/diabetes-risk",
+        headers=headers,
+        json={
+            "pregnancies": 0, "glucose": 90, "blood_pressure": 75, "skin_thickness": 20,
+            "insulin": 80, "bmi": 22.5, "diabetes_pedigree": 0.2, "age": 30,
+        },
+    )
+    assert diabetes.status_code == 200
+    assert diabetes.json()["risk_level"] in {"Low", "Moderate", "High"}
+
     history = client.get("/history", headers=headers)
     assert history.status_code == 200
-    assert len(history.json()) == 1
-    assert history.json()[0]["type"] == "Overview"
+    assert len(history.json()) == 3
+    assert {item["type"] for item in history.json()} == {"Overview", "Heart", "Diabetes"}
 
 
 def test_invalid_screening_values_are_rejected():
-    login = client.post(
+    email = f"invalid-{uuid.uuid4().hex}@example.com"
+    assert client.post(
         "/register",
-        json={"email": f"invalid-{uuid.uuid4().hex}@example.com", "password": "safe-test-password"},
-    )
+        json={"email": email, "password": "safe-test-password"},
+    ).status_code == 200
+    login = client.post("/login", json={"email": email, "password": "safe-test-password"})
     assert login.status_code == 200
-    email = login.json()  # Registration does not return a token.
-    assert "message" in email
-    # Missing required fields should be rejected before prediction logic runs.
-    response = client.post("/predict-simple", json={"age": 30})
-    assert response.status_code in {401, 422}
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    response = client.post("/predict-simple", headers=headers, json={"age": 30})
+    assert response.status_code == 422
