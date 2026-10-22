@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, create_engine, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -25,6 +26,9 @@ SECRET_KEY = os.getenv("SECRET_KEY") or "dev-only-change-me"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'users.db'}")
+# Render and some hosted Postgres providers still expose the legacy postgres:// scheme.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
@@ -323,7 +327,11 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Email already exists")
     user = User(email=email, password=hash_password(data.password))
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Email already exists")
     return {"message": "User registered successfully"}
 
 
@@ -463,7 +471,11 @@ def chat(data: ChatRequest, user: User = Depends(get_current_user)):
                 "Give concise general educational information. Never diagnose, never invent test results, "
                 "and advise professional care for urgent or concerning symptoms."
             ),
-            input=data.message,
+            input=[
+                {"role": item.get("role"), "content": item.get("content", "")}
+                for item in data.history[-7:]
+                if item.get("role") in {"user", "assistant"} and item.get("content")
+            ] + [{"role": "user", "content": data.message}],
             max_output_tokens=500,
         )
         return {"reply": response.output_text, "configured": True, "mode": "openai"}
