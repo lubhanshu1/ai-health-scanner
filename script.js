@@ -33,7 +33,7 @@ async function register(){
  try{await api("/register",{method:"POST",headers:jsonHeaders(false),body:JSON.stringify({email,password})});$("loginStatus").textContent="Account created. Click Login.";toast("Account created successfully")}catch(e){$("loginStatus").textContent=e.message}
 }
 async function loadProfile(){const d=await api("/profile",{headers:jsonHeaders()});$("profileBox").textContent=d.email;$("avatar").textContent=(d.email||"U")[0].toUpperCase()}
-async async function loadAnalytics(){
+async function loadAnalytics(){
  const d=await api("/analytics",{headers:jsonHeaders()});$("totalScans").textContent=d.total_scans;$("lowScans").textContent=d.low;$("moderateScans").textContent=d.moderate;$("highScans").textContent=d.high;
  const empty=d.total_scans===0;$("chartEmpty").classList.toggle("hidden",!empty);
  if(typeof window.Chart!=="function"){
