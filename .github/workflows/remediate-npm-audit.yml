@@ -5,14 +5,12 @@ on:
     branches: [main]
     paths:
       - package.json
-      - package-lock.json
 
 permissions:
   contents: write
 
 jobs:
   remediate:
-    if: ${{ !contains(github.event.head_commit.message, 'chore: fix npm audit vulnerabilities') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
