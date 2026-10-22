@@ -33,11 +33,18 @@ async function register(){
  try{await api("/register",{method:"POST",headers:jsonHeaders(false),body:JSON.stringify({email,password})});$("loginStatus").textContent="Account created. Click Login.";toast("Account created successfully")}catch(e){$("loginStatus").textContent=e.message}
 }
 async function loadProfile(){const d=await api("/profile",{headers:jsonHeaders()});$("profileBox").textContent=d.email;$("avatar").textContent=(d.email||"U")[0].toUpperCase()}
-async function loadAnalytics(){
+async async function loadAnalytics(){
  const d=await api("/analytics",{headers:jsonHeaders()});$("totalScans").textContent=d.total_scans;$("lowScans").textContent=d.low;$("moderateScans").textContent=d.moderate;$("highScans").textContent=d.high;
  const empty=d.total_scans===0;$("chartEmpty").classList.toggle("hidden",!empty);
+ if(typeof window.Chart!=="function"){
+  $("chartEmpty").textContent="Chart library unavailable. Your screening data is still available above.";
+  $("chartEmpty").classList.remove("hidden");
+  if(riskChart){riskChart.destroy();riskChart=null}
+  return;
+ }
+ $("chartEmpty").textContent=empty?"No screening data yet. Run your first scan to populate analytics.":"";
  if(riskChart)riskChart.destroy();
- riskChart=new Chart($("riskChart"),{type:"doughnut",data:{labels:["Low","Moderate","High"],datasets:[{data:[d.low,d.moderate,d.high],borderWidth:2,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{color:"#cbd5e1",padding:18}}},cutout:"72%"}});
+ riskChart=new window.Chart($("riskChart"),{type:"doughnut",data:{labels:["Low","Moderate","High"],datasets:[{data:[d.low,d.moderate,d.high],borderWidth:2,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{color:"#cbd5e1",padding:18}}},cutout:"72%"}});
 }
 async function loadHistory(){
  const data=await api("/history",{headers:jsonHeaders()});const box=$("history");box.replaceChildren();
@@ -87,5 +94,11 @@ async function sendChat(){
 function appendChat(who,text){const el=document.createElement("div");el.className=who==="You"?"chat-user":"chat-ai";el.textContent=`${who}: ${text}`;$("chatBox").appendChild(el);$("chatBox").scrollTop=$("chatBox").scrollHeight}
 function downloadPDF(){if(!lastResult){toast("Run a screening first.");return}const{jsPDF}=window.jspdf,doc=new jsPDF();doc.setFontSize(20);doc.text("AI Health Scanner — Screening Report",20,20);doc.setFontSize(12);doc.text(`Risk level: ${lastResult.risk_level}`,20,40);doc.text(`Screening score: ${Math.round(lastResult.risk_score*100)}%`,20,50);doc.text(`Engine: ${lastResult.method||"screening"}`,20,60);doc.text("Screening only; not a diagnosis.",20,75);doc.text(`Generated: ${new Date().toLocaleString()}`,20,90);doc.save("AI_Health_Scanner_Report.pdf");toast("Report artifact generated")}
 function clearForm(){ $("healthForm").reset();$("result").classList.add("hidden");$("engineBadge").textContent="READY";toast("Fields cleared") }
-async function boot(){if(!token()){showLogin();return}try{showDashboard();setMode("simple");await Promise.all([loadProfile(),loadHistory(),loadAnalytics(),loadTelemetry()])}catch(e){localStorage.removeItem("token");showLogin()}}
+async function boot(){
+ if(!token()){showLogin();return}
+ showDashboard();setMode("simple");
+ const results=await Promise.allSettled([loadProfile(),loadHistory(),loadAnalytics(),loadTelemetry()]);
+ if(!token()){showLogin();return}
+ if(results.some(x=>x.status==="rejected"))toast("Dashboard opened, but some panels could not load. Use Refresh to try again.");
+}
 $("loginBtn").onclick=login;$("registerBtn").onclick=register;$("logoutBtn").onclick=()=>{localStorage.removeItem("token");showLogin()};document.querySelectorAll(".mode-btn").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));$("healthForm").onsubmit=runScan;$("refreshBtn").onclick=async()=>{const r=await Promise.allSettled([loadHistory(),loadAnalytics(),loadTelemetry()]);if(r.some(x=>x.status==="rejected"))toast("Some panels could not refresh. Check your connection and try again.")};$("historyRefresh").onclick=async()=>{const r=await Promise.allSettled([loadHistory(),loadAnalytics()]);if(r.some(x=>x.status==="rejected"))toast("History or analytics could not refresh. Try again.")};$("downloadBtn").onclick=downloadPDF;$("clearBtn").onclick=clearForm;$("imageBtn").onclick=uploadImage;$("chatToggle").onclick=()=>{$("chatbot").classList.toggle("hidden")};$("closeChat").onclick=()=>{$("chatbot").classList.add("hidden")};$("sendChat").onclick=sendChat;$("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter")sendChat()});boot();
