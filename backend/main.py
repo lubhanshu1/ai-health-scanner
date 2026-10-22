@@ -22,7 +22,11 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BASE_DIR / "www"
-SECRET_KEY = os.getenv("SECRET_KEY") or "dev-only-change-me"
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    if os.getenv("RENDER", "").lower() == "true" or os.getenv("ENVIRONMENT", "").lower() == "production":
+        raise RuntimeError("SECRET_KEY must be configured in production.")
+    SECRET_KEY = "dev-only-change-me"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'users.db'}")
@@ -461,7 +465,7 @@ async def scan_image(image: UploadFile = File(...), user: User = Depends(get_cur
 def chat(data: ChatRequest, user: User = Depends(get_current_user)):
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return {"reply": local_health_assistant(data.message), "configured": False, "mode": "local-safe-assistant"}
+        return {"reply": local_health_assistant(data.message, data.history), "configured": False, "mode": "local-safe-assistant"}
 
     try:
         from openai import OpenAI
@@ -486,7 +490,7 @@ def chat(data: ChatRequest, user: User = Depends(get_current_user)):
         )
         return {"reply": response.output_text, "configured": True, "mode": "openai"}
     except Exception:
-        return {"reply": local_health_assistant(data.message), "configured": True, "mode": "safe-fallback"}
+        return {"reply": local_health_assistant(data.message, data.history), "configured": True, "mode": "safe-fallback"}
 
 
 @app.get("/")
